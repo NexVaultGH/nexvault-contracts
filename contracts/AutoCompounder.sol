@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.25;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -49,8 +49,18 @@ contract AutoCompounder {
     address public constant OWNER =
         0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0;
 
+    // ── Execution environment — Nexus zkVM v3.0 ───────────────────────
+    string public constant EXECUTION_LAYER = "NexusEVM";
+    string public constant PROOF_SYSTEM    = "Nexus zkVM v3.0";
+
     /// @notice Maximum users per batch (prevents out-of-gas)
     uint256 public constant MAX_BATCH = 100;
+
+    // ── Custom errors ──────────────────────────────────────────────────
+    error NotOwner();
+    error ZeroVaultAddress();
+    error ArrayLengthMismatch();
+    error BatchExceedsMax();
 
     /// @notice The USDXVault contract to compound into
     IUSDXVault public vault;
@@ -65,17 +75,14 @@ contract AutoCompounder {
 
     // ── Modifier ───────────────────────────────────────────────────────
     modifier onlyOwner() {
-        require(msg.sender == OWNER, "AutoCompounder: not owner");
+        if (msg.sender != OWNER) revert NotOwner();
         _;
     }
 
     // ── Constructor ────────────────────────────────────────────────────
     constructor(address _vault) {
-        require(
-            msg.sender == OWNER,
-            "AutoCompounder: must deploy from owner wallet"
-        );
-        require(_vault != address(0), "AutoCompounder: zero vault");
+        if (msg.sender != OWNER)      revert NotOwner();
+        if (_vault == address(0))     revert ZeroVaultAddress();
         vault = IUSDXVault(_vault);
         emit VaultUpdated(_vault);
     }
@@ -87,7 +94,7 @@ contract AutoCompounder {
      * @param  _vault New USDXVault contract address.
      */
     function setVault(address _vault) external onlyOwner {
-        require(_vault != address(0), "AutoCompounder: zero vault");
+        if (_vault == address(0)) revert ZeroVaultAddress();
         vault = IUSDXVault(_vault);
         emit VaultUpdated(_vault);
     }
@@ -106,14 +113,8 @@ contract AutoCompounder {
         address[] calldata users,
         uint256[] calldata depositIndices
     ) external {
-        require(
-            users.length == depositIndices.length,
-            "AutoCompounder: array length mismatch"
-        );
-        require(
-            users.length <= MAX_BATCH,
-            "AutoCompounder: batch exceeds maximum"
-        );
+        if (users.length != depositIndices.length) revert ArrayLengthMismatch();
+        if (users.length > MAX_BATCH)              revert BatchExceedsMax();
 
         uint256 succeeded = 0;
         uint256 len = users.length;

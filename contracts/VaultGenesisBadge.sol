@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.25;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -50,8 +50,23 @@ contract VaultGenesisBadge is ERC721 {
     address public constant OWNER =
         0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0;
 
+    // ── Execution environment — Nexus zkVM v3.0 ───────────────────────
+    // This badge is minted on NexusEVM. Every mint transaction is
+    // automatically proven by Nexus zkVM v3.0. The ZK proof metadata
+    // is permanently encoded into every badge's on-chain attributes.
+    string public constant EXECUTION_LAYER = "NexusEVM";
+    string public constant PROOF_SYSTEM    = "Nexus zkVM v3.0";
+
     // ── Supply cap — IMMUTABLE, cannot be changed after deploy ─────────
     uint256 public constant MAX_SUPPLY = 5_000;
+
+    // ── Custom errors ──────────────────────────────────────────────────
+    error NotOwner();
+    error NotMinter();
+    error ZeroAddress();
+    error AlreadyHasBadge();
+    error SupplyExhausted();
+    error TokenDoesNotExist();
 
     // ── State ──────────────────────────────────────────────────────────
     uint256 private _nextTokenId = 1;
@@ -78,21 +93,18 @@ contract VaultGenesisBadge is ERC721 {
 
     // ── Modifiers ──────────────────────────────────────────────────────
     modifier onlyOwner() {
-        require(msg.sender == OWNER, "Badge: not owner");
+        if (msg.sender != OWNER) revert NotOwner();
         _;
     }
 
     modifier onlyMinter() {
-        require(msg.sender == authorizedMinter, "Badge: not authorized minter");
+        if (msg.sender != authorizedMinter) revert NotMinter();
         _;
     }
 
     // ── Constructor ────────────────────────────────────────────────────
     constructor() ERC721("Vault Genesis Badge", "NVGB") {
-        require(
-            msg.sender == OWNER,
-            "Badge: must deploy from owner wallet"
-        );
+        if (msg.sender != OWNER) revert NotOwner();
     }
 
     // ── Admin ──────────────────────────────────────────────────────────
@@ -103,7 +115,7 @@ contract VaultGenesisBadge is ERC721 {
      * @param minter The USDXVault contract address.
      */
     function setMinterAuthorization(address minter) external onlyOwner {
-        require(minter != address(0), "Badge: zero address");
+        if (minter == address(0)) revert ZeroAddress();
         authorizedMinter = minter;
         emit MinterSet(minter);
     }
@@ -123,9 +135,9 @@ contract VaultGenesisBadge is ERC721 {
         onlyMinter
         returns (uint256 tokenId)
     {
-        require(recipient != address(0),   "Badge: zero address");
-        require(!hasBadge[recipient],      "Badge: already holds a badge");
-        require(_nextTokenId <= MAX_SUPPLY, "Badge: genesis supply exhausted");
+        if (recipient == address(0))     revert ZeroAddress();
+        if (hasBadge[recipient])         revert AlreadyHasBadge();
+        if (_nextTokenId > MAX_SUPPLY)   revert SupplyExhausted();
 
         tokenId = _nextTokenId;
         unchecked { _nextTokenId++; }
@@ -169,10 +181,7 @@ contract VaultGenesisBadge is ERC721 {
         override
         returns (string memory)
     {
-        require(
-            tokenId > 0 && tokenId < _nextTokenId,
-            "Badge: token does not exist"
-        );
+        if (tokenId == 0 || tokenId >= _nextTokenId) revert TokenDoesNotExist();
 
         address minter = originalMinter[tokenId];
         string memory pos = tokenId.toString();
@@ -230,6 +239,9 @@ contract VaultGenesisBadge is ERC721 {
             '{"trait_type":"Rarity Tier","value":"', posLabel, '"},',
             '{"trait_type":"Protocol","value":"NexVault"},',
             '{"trait_type":"Network","value":"Nexus"},',
+            '{"trait_type":"Execution Layer","value":"NexusEVM"},',
+            '{"trait_type":"Proof System","value":"Nexus zkVM v3.0"},',
+            '{"trait_type":"ZK Proven","value":"true"},',
             '{"trait_type":"Original Depositor","value":"', walletShort, '"},',
             '{"trait_type":"Max Supply","value":5000}',
             ']}'

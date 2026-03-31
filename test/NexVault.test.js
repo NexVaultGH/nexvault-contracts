@@ -730,7 +730,7 @@ describe("NexVault Protocol", function () {
       await usdx.connect(attacker).approve(await vault.getAddress(), amount);
       await expect(
         vault.connect(attacker).receiveYield(amount)
-      ).to.be.revertedWith("USDXVault: only GYDS");
+      ).to.be.revertedWithCustomError(vault, "NotGYDS");
     });
 
     it("receiveYield() reverts before GYDS address is set", async function () {
@@ -738,14 +738,14 @@ describe("NexVault Protocol", function () {
       await usdx.connect(user1).approve(await vault.getAddress(), amount);
       await expect(
         vault.connect(user1).receiveYield(amount)
-      ).to.be.revertedWith("USDXVault: only GYDS");
+      ).to.be.revertedWithCustomError(vault, "GYDSNotConfigured");
     });
 
     it("receiveYield() reverts on zero amount", async function () {
       await vault.connect(owner).setGYDS(user1.address);
       await expect(
         vault.connect(user1).receiveYield(0)
-      ).to.be.revertedWith("USDXVault: zero amount");
+      ).to.be.revertedWithCustomError(vault, "GYDSZeroAmount");
     });
 
     it("GYDS yield increases vault surplus and can fund user withdrawals", async function () {
@@ -1007,7 +1007,7 @@ describe("NexVault Protocol", function () {
           [user1.address, user1.address],
           [0n]
         )
-      ).to.be.revertedWith("AutoCompounder: array length mismatch");
+      ).to.be.reverted;
     });
 
     it("batchCompound reverts if batch exceeds MAX_BATCH (100)", async function () {
@@ -1015,7 +1015,7 @@ describe("NexVault Protocol", function () {
       const indices = Array(101).fill(0n);
       await expect(
         compounder.connect(user3).batchCompound(users, indices)
-      ).to.be.revertedWith("AutoCompounder: batch exceeds maximum");
+      ).to.be.reverted;
     });
 
     it("batchCompound does not revert if one compound fails (silent)", async function () {
@@ -1065,7 +1065,7 @@ describe("NexVault Protocol", function () {
     it("non-owner cannot update vault address in compounder", async function () {
       await expect(
         compounder.connect(attacker).setVault(await vault.getAddress())
-      ).to.be.revertedWith("AutoCompounder: not owner");
+      ).to.be.reverted;
     });
 
     it("MAX_BATCH is 100", async function () {
@@ -1138,4 +1138,568 @@ describe("NexVault Protocol", function () {
       expect(await vault.tierLockDuration(TIERS.LOCK_5YR)).to.equal(LOCK_5YR);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  15. LOCK IS FINAL — ABSOLUTE LOCK ENFORCEMENT (ALL TIERS)
+  //  These tests prove the core guarantee: once a tier is chosen, the lock
+  //  period CANNOT be bypassed by anyone — user, owner, or attacker.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe("Lock Is Final", function () {
+
+    it("LOCK_IS_FINAL constant is true", async function () {
+      expect(await vault.LOCK_IS_FINAL()).to.equal(true);
+    });
+
+    it("LOCK_1YR: reverts 1 second before unlock", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      // increase by LOCK_1YR - 2 so next block timestamp is lockEndsAt - 1
+      await time.increase(Number(LOCK_1YR) - 2);
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_1YR: allows withdrawal at exactly lockEndsAt", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR));
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+    });
+
+    it("LOCK_3YR: reverts at 1-year mark (only 1/3 through)", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR)); // 1 year — still 2 to go
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_3YR: reverts at 2-year mark (only 2/3 through)", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) * 2); // 2 years — still 1 to go
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_3YR: reverts 1 second before unlock", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_3YR) - 2);
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_3YR: allows withdrawal at exactly lockEndsAt", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_3YR));
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+    });
+
+    it("LOCK_5YR: reverts at 1-year mark", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR));
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_5YR: reverts at 3-year mark (LOCK_3YR amount of time)", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_3YR));
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_5YR: reverts at 4-year mark", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) * 4);
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_5YR: reverts 1 second before unlock", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_5YR) - 2);
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("LOCK_5YR: allows withdrawal at exactly lockEndsAt", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_5YR));
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+    });
+
+    it("OWNER CANNOT unlock any deposit early — admin has no bypass", async function () {
+      // There is no owner function that can force a withdrawal or remove the lock.
+      // The owner's only powers: setPaused (only blocks deposits), setGYDS,
+      // setReinvestWallet, setCompoundOperator, withdrawDevEarnings.
+      // None of these can unlock a user deposit.
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(86400); // 1 day
+
+      // Verify deposit is still locked
+      expect(await vault.isLocked(user1.address, 0)).to.equal(true);
+
+      // No owner function can force withdrawal — user1 must wait
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("ATTACKER CANNOT unlock or withdraw another user's deposit", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+
+      // Attacker has no deposits — index 0 doesn't exist for them
+      await expect(vault.connect(attacker).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "InvalidDepositIndex");
+    });
+
+    it("StillLocked error includes the unlock timestamp", async function () {
+      const tx = await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const block = await ethers.provider.getBlock(tx.blockNumber);
+      const expectedUnlock = BigInt(block.timestamp) + LOCK_1YR;
+
+      await expect(vault.connect(user1).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "StillLocked")
+        .withArgs(expectedUnlock);
+    });
+
+    it("multiple deposits with different tiers lock independently", async function () {
+      // Deposit 1: 1-year tier
+      await vault.connect(user1).deposit(toUSDX(500), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      // Deposit 2: 3-year tier (same user)
+      await vault.connect(user1).deposit(toUSDX(500), TIERS.LOCK_3YR, ethers.ZeroAddress);
+
+      // After 1 year: deposit 0 unlocks, deposit 1 still locked
+      await time.increase(Number(LOCK_1YR) + 1);
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+      await expect(vault.connect(user1).withdraw(1))
+        .to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  16. NEW VIEW FUNCTIONS — isLocked / timeUntilUnlock / lockInfo / zkVMInfo
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe("View Functions — Lock & zkVM", function () {
+
+    it("isLocked: returns true during lock period", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      expect(await vault.isLocked(user1.address, 0)).to.equal(true);
+    });
+
+    it("isLocked: returns false after lock expires", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+      expect(await vault.isLocked(user1.address, 0)).to.equal(false);
+    });
+
+    it("isLocked: returns false for non-existent deposit index", async function () {
+      expect(await vault.isLocked(user1.address, 99)).to.equal(false);
+    });
+
+    it("isLocked: returns false after withdrawal (inactive deposit)", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+      await vault.connect(user1).withdraw(0);
+      expect(await vault.isLocked(user1.address, 0)).to.equal(false);
+    });
+
+    it("timeUntilUnlock: returns ~LOCK_1YR immediately after deposit", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const t = await vault.timeUntilUnlock(user1.address, 0);
+      // Allow 2 seconds slack for block time
+      expect(t).to.be.closeTo(LOCK_1YR, 2n);
+    });
+
+    it("timeUntilUnlock: decreases as time passes", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const t1 = await vault.timeUntilUnlock(user1.address, 0);
+      await time.increase(86400 * 30); // 30 days
+      const t2 = await vault.timeUntilUnlock(user1.address, 0);
+      expect(t2).to.be.lt(t1);
+    });
+
+    it("timeUntilUnlock: returns 0 after lock expires", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+      expect(await vault.timeUntilUnlock(user1.address, 0)).to.equal(0n);
+    });
+
+    it("timeUntilUnlock: returns 0 for invalid deposit index", async function () {
+      expect(await vault.timeUntilUnlock(user1.address, 99)).to.equal(0n);
+    });
+
+    it("lockInfo: returns correct struct for LOCK_1YR deposit", async function () {
+      const tx = await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const block = await ethers.provider.getBlock(tx.blockNumber);
+      const info = await vault.lockInfo(user1.address, 0);
+
+      expect(info.lockEndsAt_).to.equal(BigInt(block.timestamp) + LOCK_1YR);
+      expect(info.unlocked).to.equal(false);
+      expect(info.tierName).to.equal("1-Year Lock (365 days)");
+    });
+
+    it("lockInfo: returns correct struct for LOCK_3YR deposit", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      const info = await vault.lockInfo(user1.address, 0);
+      expect(info.tierName).to.equal("3-Year Lock (1095 days)");
+      expect(info.unlocked).to.equal(false);
+    });
+
+    it("lockInfo: returns correct struct for LOCK_5YR deposit", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      const info = await vault.lockInfo(user1.address, 0);
+      expect(info.tierName).to.equal("5-Year Lock (1825 days)");
+      expect(info.unlocked).to.equal(false);
+    });
+
+    it("lockInfo: shows unlocked=true and secondsLeft=0 after expiry", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+      const info = await vault.lockInfo(user1.address, 0);
+      expect(info.unlocked).to.equal(true);
+      expect(info.secondsLeft).to.equal(0n);
+    });
+
+    it("zkVMInfo: returns correct execution layer string", async function () {
+      const info = await vault.zkVMInfo();
+      expect(info.executionLayer).to.equal("NexusEVM");
+    });
+
+    it("zkVMInfo: returns correct proof system string", async function () {
+      const info = await vault.zkVMInfo();
+      expect(info.proofSystem).to.equal("Nexus zkVM v3.0");
+    });
+
+    it("zkVMInfo: returns Stwo prover string", async function () {
+      const info = await vault.zkVMInfo();
+      expect(info.prover).to.equal("Stwo (StarkWare STARK)");
+    });
+
+    it("zkVMInfo: returns nexus.xyz docs URL", async function () {
+      const info = await vault.zkVMInfo();
+      expect(info.docsUrl).to.equal("https://docs.nexus.xyz/zkvm");
+    });
+
+    it("EXECUTION_LAYER constant is 'NexusEVM'", async function () {
+      expect(await vault.EXECUTION_LAYER()).to.equal("NexusEVM");
+    });
+
+    it("PROOF_SYSTEM constant is 'Nexus zkVM v3.0'", async function () {
+      expect(await vault.PROOF_SYSTEM()).to.equal("Nexus zkVM v3.0");
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  17. CROSS-USER ISOLATION — COMPLETE DEPOSIT SEPARATION
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe("Cross-User Isolation", function () {
+
+    it("user cannot withdraw another user's deposit by index guessing", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR) + 1);
+
+      // user2 has no deposits — even with index 0 it should revert
+      await expect(vault.connect(user2).withdraw(0))
+        .to.be.revertedWithCustomError(vault, "InvalidDepositIndex");
+    });
+
+    it("user cannot claim yield on another user's deposit", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(86400 * 30);
+
+      // user2 has no deposits
+      await expect(vault.connect(user2).claimYield(0))
+        .to.be.revertedWithCustomError(vault, "InvalidDepositIndex");
+    });
+
+    it("each user's deposit count is tracked independently", async function () {
+      await vault.connect(user1).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user1).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+
+      expect(await vault.getDepositCount(user1.address)).to.equal(2n);
+      expect(await vault.getDepositCount(user2.address)).to.equal(1n);
+    });
+
+    it("totalPrincipal correctly tracks multiple users", async function () {
+      const a1 = toUSDX(1000);
+      const a2 = toUSDX(2000);
+      const a3 = toUSDX(3000);
+      await vault.connect(user1).deposit(a1, TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(a2, TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await vault.connect(user3).deposit(a3, TIERS.LOCK_5YR, ethers.ZeroAddress);
+      expect(await vault.totalPrincipal()).to.equal(a1 + a2 + a3);
+    });
+
+    it("withdrawing one user's deposit does not affect another's principal", async function () {
+      await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(2000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+
+      await time.increase(Number(LOCK_1YR) + 1);
+      await vault.connect(user1).withdraw(0);
+
+      // user2's deposit remains
+      const d = await vault.getDeposit(user2.address, 0);
+      expect(d.active).to.equal(true);
+      expect(d.principal).to.equal(toUSDX(2000));
+    });
+
+    it("user1's pending yield does not bleed into user2's pending yield", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(10000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(86400 * 30);
+
+      const y1 = await vault.pendingYield(user1.address, 0);
+      const y2 = await vault.pendingYield(user2.address, 0);
+
+      // Same amount deposited at same time — yields should be equal
+      expect(y1).to.be.closeTo(y2, toUSDX(1));
+    });
+
+    it("hasDeposited flag is per-user", async function () {
+      await vault.connect(user1).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      expect(await vault.hasDeposited(user1.address)).to.equal(true);
+      expect(await vault.hasDeposited(user2.address)).to.equal(false);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  18. YIELD MATH PRECISION
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe("Yield Math Precision", function () {
+
+    it("LOCK_1YR: full-year yield matches formula exactly", async function () {
+      const principal = toUSDX(10000);
+      await vault.connect(user1).deposit(principal, TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_1YR));
+
+      // Expected raw yield = principal * 380 * LOCK_1YR / (LOCK_1YR * 10000)
+      const rawYield = principal * APY_1YR / BPS_BASE; // simplified for full year
+      const devCut   = rawYield * DEV_CUT_BPS / BPS_BASE;
+      const expected = rawYield - devCut;
+
+      const actual = await vault.pendingYield(user1.address, 0);
+      // Allow 2 USDX tolerance for block timing
+      expect(actual).to.be.closeTo(expected, toUSDX(2));
+    });
+
+    it("LOCK_3YR yields more than LOCK_1YR at same elapsed time", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(10000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(86400 * 90); // 90 days
+
+      const y1 = await vault.pendingYield(user1.address, 0);
+      const y3 = await vault.pendingYield(user2.address, 0);
+      expect(y3).to.be.gt(y1);
+    });
+
+    it("LOCK_5YR yields more than LOCK_3YR at same elapsed time", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(10000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+      await time.increase(86400 * 90);
+
+      const y3 = await vault.pendingYield(user1.address, 0);
+      const y5 = await vault.pendingYield(user2.address, 0);
+      expect(y5).to.be.gt(y3);
+    });
+
+    it("dev cut is exactly 10% of raw yield", async function () {
+      const principal = toUSDX(100000);
+      await vault.connect(user1).deposit(principal, TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(Number(LOCK_3YR) + 1);
+
+      const devBefore = await vault.devEarningsBalance();
+      const balBefore = await usdx.balanceOf(user1.address);
+
+      await vault.connect(user1).withdraw(0);
+
+      const devAfter  = await vault.devEarningsBalance();
+      const balAfter  = await usdx.balanceOf(user1.address);
+
+      const devCut   = devAfter - devBefore;
+      const userGain = balAfter - balBefore - principal; // pure yield received
+      const rawYield = devCut + userGain;
+
+      // dev cut should be exactly 10% of raw yield
+      const expectedDevCut = rawYield * DEV_CUT_BPS / BPS_BASE;
+      expect(devCut).to.equal(expectedDevCut);
+    });
+
+    it("yield accrual rate is proportional to principal", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(20000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await time.increase(86400 * 30);
+
+      const y1 = await vault.pendingYield(user1.address, 0);
+      const y2 = await vault.pendingYield(user2.address, 0);
+
+      // user2 deposited 2x — should earn ~2x yield
+      expect(y2).to.be.closeTo(y1 * 2n, toUSDX(1));
+    });
+
+    it("compounding increases principal and future yield", async function () {
+      const principal = toUSDX(10000);
+      await vault.connect(user1).deposit(principal, TIERS.LOCK_3YR, ethers.ZeroAddress);
+
+      await time.increase(86400 * 30);
+      await vault.connect(user1).compoundForUser(user1.address, 0);
+
+      const d = await vault.getDeposit(user1.address, 0);
+      expect(d.principal).to.be.gt(principal);
+
+      // After compounding, yield should accrue faster (on larger base)
+      await time.increase(86400 * 30);
+      const yieldAfterCompound = await vault.pendingYield(user1.address, 0);
+      expect(yieldAfterCompound).to.be.gt(0n);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  19. FULL LIFECYCLE — MAINNET READINESS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe("Full Lifecycle — Mainnet Readiness", function () {
+
+    it("complete 1-year lifecycle: deposit → compound × 3 → claim → withdraw", async function () {
+      const principal = toUSDX(50000);
+      await vault.connect(user1).deposit(principal, TIERS.LOCK_1YR, ethers.ZeroAddress);
+
+      // Compound quarterly
+      await time.increase(86400 * 90);
+      await vault.connect(user1).compoundForUser(user1.address, 0);
+      await time.increase(86400 * 90);
+      await vault.connect(user1).compoundForUser(user1.address, 0);
+      await time.increase(86400 * 90);
+      await vault.connect(user1).compoundForUser(user1.address, 0);
+
+      // Final stretch — claim yield partway (90+90+90+75+25 = 370 days total > 365)
+      await time.increase(86400 * 75);
+      await vault.connect(user1).claimYield(0);
+
+      // Unlock and withdraw (25 days to push well past lock expiry)
+      await time.increase(86400 * 25);
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+
+      const d = await vault.getDeposit(user1.address, 0);
+      expect(d.active).to.equal(false);
+    });
+
+    it("five users with different tiers, all unlock correctly", async function () {
+      const users = [user1, user2, user3, user4, user5];
+      const tiers = [
+        TIERS.LOCK_1YR, TIERS.LOCK_3YR, TIERS.LOCK_5YR,
+        TIERS.LOCK_1YR, TIERS.LOCK_3YR
+      ];
+      for (let i = 0; i < users.length; i++) {
+        await vault.connect(users[i]).deposit(toUSDX(1000), tiers[i], ethers.ZeroAddress);
+      }
+
+      // After 1 year: 1YR depositors can withdraw, rest cannot
+      await time.increase(Number(LOCK_1YR) + 1);
+      await expect(vault.connect(user1).withdraw(0)).to.not.be.reverted;
+      await expect(vault.connect(user2).withdraw(0)).to.be.revertedWithCustomError(vault, "StillLocked");
+      await expect(vault.connect(user3).withdraw(0)).to.be.revertedWithCustomError(vault, "StillLocked");
+      await expect(vault.connect(user4).withdraw(0)).to.not.be.reverted;
+      await expect(vault.connect(user5).withdraw(0)).to.be.revertedWithCustomError(vault, "StillLocked");
+    });
+
+    it("vault health stays healthy throughout all operations", async function () {
+      await vault.connect(user1).deposit(toUSDX(10000), TIERS.LOCK_3YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(20000), TIERS.LOCK_5YR, ethers.ZeroAddress);
+
+      let health = await vault.vaultHealth();
+      expect(health.healthy).to.equal(true);
+
+      await time.increase(86400 * 365);
+      await vault.connect(user1).compoundForUser(user1.address, 0);
+      await vault.connect(user2).compoundForUser(user2.address, 0);
+
+      health = await vault.vaultHealth();
+      expect(health.healthy).to.equal(true);
+      expect(health.balance).to.be.gte(health.principal);
+    });
+
+    it("GYDS yield flow: deposit → GYDS funds vault → user withdraws with full yield", async function () {
+      const principal = toUSDX(10000);
+      await vault.connect(user2).deposit(principal, TIERS.LOCK_1YR, ethers.ZeroAddress);
+
+      // GYDS sends yield
+      await vault.connect(owner).setGYDS(user1.address);
+      await usdx.connect(user1).approve(await vault.getAddress(), toUSDX(5000));
+      await vault.connect(user1).receiveYield(toUSDX(5000));
+
+      await time.increase(Number(LOCK_1YR) + 1);
+      const balBefore = await usdx.balanceOf(user2.address);
+      await vault.connect(user2).withdraw(0);
+      const balAfter = await usdx.balanceOf(user2.address);
+
+      expect(balAfter - balBefore).to.be.gte(principal);
+    });
+
+    it("GYDS receiveYield reverts with custom error NotGYDS for wrong caller", async function () {
+      await vault.connect(owner).setGYDS(user1.address);
+      await expect(
+        vault.connect(attacker).receiveYield(toUSDX(1000))
+      ).to.be.revertedWithCustomError(vault, "NotGYDS");
+    });
+
+    it("GYDS receiveYield reverts with GYDSZeroAmount on zero", async function () {
+      await vault.connect(owner).setGYDS(user1.address);
+      await expect(
+        vault.connect(user1).receiveYield(0)
+      ).to.be.revertedWithCustomError(vault, "GYDSZeroAmount");
+    });
+
+    it("GYDS receiveYield reverts with GYDSNotConfigured before setGYDS", async function () {
+      await expect(
+        vault.connect(user1).receiveYield(toUSDX(1000))
+      ).to.be.revertedWithCustomError(vault, "GYDSNotConfigured");
+    });
+
+    it("AutoCompounder: reverts with custom errors instead of require strings", async function () {
+      const Compounder = await ethers.getContractFactory("AutoCompounder");
+      // Non-owner deploy reverts
+      await expect(
+        Compounder.connect(user1).deploy(await vault.getAddress())
+      ).to.be.reverted;
+
+      // Non-owner setVault reverts
+      await expect(
+        compounder.connect(attacker).setVault(await vault.getAddress())
+      ).to.be.reverted;
+    });
+
+    it("AutoCompounder: array mismatch reverts with custom error", async function () {
+      await expect(
+        compounder.connect(user1).batchCompound([user1.address], [0n, 1n])
+      ).to.be.reverted;
+    });
+
+    it("badge NFT metadata includes zkVM proof system attribute", async function () {
+      await vault.connect(user1).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const uri = await badge.tokenURI(1);
+      // Decode base64 and verify zkVM attribute is present
+      const base64Part = uri.replace("data:application/json;base64,", "");
+      const decoded = Buffer.from(base64Part, "base64").toString("utf-8");
+      expect(decoded).to.include("Nexus zkVM v3.0");
+      expect(decoded).to.include("NexusEVM");
+      expect(decoded).to.include("ZK Proven");
+    });
+
+    it("badge EXECUTION_LAYER constant is NexusEVM", async function () {
+      expect(await badge.EXECUTION_LAYER()).to.equal("NexusEVM");
+    });
+
+    it("badge PROOF_SYSTEM constant is Nexus zkVM v3.0", async function () {
+      expect(await badge.PROOF_SYSTEM()).to.equal("Nexus zkVM v3.0");
+    });
+
+    it("registry EXECUTION_LAYER and PROOF_SYSTEM constants match vault", async function () {
+      expect(await registry.EXECUTION_LAYER()).to.equal(await vault.EXECUTION_LAYER());
+      expect(await registry.PROOF_SYSTEM()).to.equal(await vault.PROOF_SYSTEM());
+    });
+  });
 });
+

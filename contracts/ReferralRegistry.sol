@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.25;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -51,6 +51,14 @@ contract ReferralRegistry {
     address public constant OWNER =
         0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0;
 
+    // ── Execution environment — Nexus zkVM v3.0 ───────────────────────
+    string public constant EXECUTION_LAYER = "NexusEVM";
+    string public constant PROOF_SYSTEM    = "Nexus zkVM v3.0";
+
+    // ── Custom errors ──────────────────────────────────────────────────
+    error NotOwner();
+    error ZeroAddress();
+
     // ── Referral economics ─────────────────────────────────────────────
     uint16 public constant BONUS_PER_REFERRAL_BPS = 50;   // +0.50% per referral
     uint16 public constant MAX_BONUS_BPS          = 200;  // +2.00% maximum
@@ -75,22 +83,22 @@ contract ReferralRegistry {
     event VaultAuthorized(address indexed vault, bool authorized);
 
     // ── Modifiers ──────────────────────────────────────────────────────
+    // ── Additional custom errors ───────────────────────────────────────
+    error UnauthorizedVault();
+
     modifier onlyOwner() {
-        require(msg.sender == OWNER, "Registry: not owner");
+        if (msg.sender != OWNER) revert NotOwner();
         _;
     }
 
     modifier onlyAuthorizedVault() {
-        require(authorizedVaults[msg.sender], "Registry: unauthorized vault");
+        if (!authorizedVaults[msg.sender]) revert UnauthorizedVault();
         _;
     }
 
     // ── Constructor ────────────────────────────────────────────────────
     constructor() {
-        require(
-            msg.sender == OWNER,
-            "Registry: must deploy from owner wallet"
-        );
+        if (msg.sender != OWNER) revert NotOwner();
     }
 
     // ── Admin ──────────────────────────────────────────────────────────
@@ -104,7 +112,7 @@ contract ReferralRegistry {
         address vault,
         bool    authorized
     ) external onlyOwner {
-        require(vault != address(0), "Registry: zero address");
+        if (vault == address(0)) revert ZeroAddress();
         authorizedVaults[vault] = authorized;
         emit VaultAuthorized(vault, authorized);
     }

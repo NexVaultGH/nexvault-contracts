@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.25;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -93,6 +93,23 @@ contract USDXVault is ReentrancyGuard {
     address public constant OWNER =
         0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0;
 
+    // ── Execution environment — Nexus zkVM v3.0 ───────────────────────
+    // These constants are permanently recorded on-chain, describing the
+    // zero-knowledge execution environment this contract runs inside.
+    // Every transaction is automatically proven by the Nexus zkVM running
+    // on every node — no additional code or configuration required.
+    string public constant EXECUTION_LAYER = "NexusEVM";
+    string public constant PROOF_SYSTEM    = "Nexus zkVM v3.0";
+    string public constant PROOF_PROVER    = "Stwo (StarkWare STARK)";
+    string public constant ZKVM_DOCS       = "https://docs.nexus.xyz/zkvm";
+
+    // ── Lock finality guarantee ────────────────────────────────────────
+    // LOCK_IS_FINAL = true means: once a user deposits into a tier,
+    // the chosen lock period CANNOT be shortened, bypassed, or cancelled
+    // by anyone — including the owner. The choice of tier is PERMANENT.
+    // Withdrawal before lockEndsAt is IMPOSSIBLE at the contract level.
+    bool public constant LOCK_IS_FINAL = true;
+
     // ── Genesis badge limit ────────────────────────────────────────────
     uint256 public constant GENESIS_BADGE_LIMIT = 5_000;
 
@@ -185,12 +202,15 @@ contract USDXVault is ReentrancyGuard {
     error ZeroAddress();
     error InvalidDepositIndex();
     error DepositNotActive();
-    error StillLocked(uint256 unlocksAt);
+    error StillLocked(uint256 unlocksAt);   // lock period has not expired
     error InsufficientYieldBalance();
     error ExceedsDevEarnings();
     error WouldDipIntoPrincipal();
     error AmountOverflow();
     error MustDeployFromOwner();
+    error NotGYDS();                         // caller is not the registered GYDS address
+    error GYDSNotConfigured();               // GYDS address has not been set yet
+    error GYDSZeroAmount();                  // receiveYield called with zero amount
 
     // ── Modifiers ──────────────────────────────────────────────────────
     modifier onlyOwner() {
@@ -254,8 +274,9 @@ contract USDXVault is ReentrancyGuard {
      * @param amount Amount of USDX yield being deposited (6 decimals).
      */
     function receiveYield(uint256 amount) external nonReentrant {
-        require(msg.sender == gyds, "USDXVault: only GYDS");
-        require(amount > 0, "USDXVault: zero amount");
+        if (gyds == address(0))      revert GYDSNotConfigured();
+        if (msg.sender != gyds)      revert NotGYDS();
+        if (amount == 0)             revert GYDSZeroAmount();
         usdx.safeTransferFrom(msg.sender, address(this), amount);
         emit GYDSYieldReceived(amount, msg.sender);
     }
@@ -603,6 +624,100 @@ contract USDXVault is ReentrancyGuard {
         devBalance = devEarningsBalance;
         surplus    = balance > principal ? balance - principal : 0;
         healthy    = balance >= principal;
+    }
+
+    /**
+     * @notice Returns true if a deposit is currently inside its lock period.
+     *         Withdrawal is IMPOSSIBLE when this returns true.
+     *         LOCK_IS_FINAL guarantees this cannot be bypassed by anyone.
+     * @param  user         The depositor's wallet.
+     * @param  depositIndex Index in the user's deposit array.
+     * @return locked       True while inside lock window, false after expiry.
+     */
+    function isLocked(address user, uint256 depositIndex)
+        external
+        view
+        returns (bool locked)
+    {
+        if (depositIndex >= _deposits[user].length) return false;
+        Deposit storage d = _deposits[user][depositIndex];
+        if (!d.active) return false;
+        return block.timestamp < d.lockEndsAt;
+    }
+
+    /**
+     * @notice Seconds remaining until a deposit can be withdrawn.
+     *         Returns 0 if the lock has already expired or the deposit is inactive.
+     * @param  user         The depositor's wallet.
+     * @param  depositIndex Index in the user's deposit array.
+     * @return seconds_      Time remaining in the lock period.
+     */
+    function timeUntilUnlock(address user, uint256 depositIndex)
+        external
+        view
+        returns (uint256 seconds_)
+    {
+        if (depositIndex >= _deposits[user].length) return 0;
+        Deposit storage d = _deposits[user][depositIndex];
+        if (!d.active) return 0;
+        if (block.timestamp >= d.lockEndsAt) return 0;
+        return d.lockEndsAt - block.timestamp;
+    }
+
+    /**
+     * @notice Full lock status for a deposit in a single call.
+     * @param  user            The depositor's wallet.
+     * @param  depositIndex    Index in the user's deposit array.
+     * @return lockEndsAt_     Unix timestamp when lock expires.
+     * @return secondsLeft     Seconds remaining until unlock (0 if unlocked).
+     * @return unlocked        True if the deposit can be withdrawn now.
+     * @return tierName        Human-readable tier name.
+     */
+    function lockInfo(address user, uint256 depositIndex)
+        external
+        view
+        returns (
+            uint64  lockEndsAt_,
+            uint256 secondsLeft,
+            bool    unlocked,
+            string memory tierName
+        )
+    {
+        if (depositIndex >= _deposits[user].length) return (0, 0, false, "");
+        Deposit storage d = _deposits[user][depositIndex];
+        lockEndsAt_ = d.lockEndsAt;
+        if (block.timestamp >= d.lockEndsAt) {
+            secondsLeft = 0;
+            unlocked    = true;
+        } else {
+            secondsLeft = d.lockEndsAt - block.timestamp;
+            unlocked    = false;
+        }
+        if (d.tier == Tier.LOCK_1YR) tierName = "1-Year Lock (365 days)";
+        else if (d.tier == Tier.LOCK_3YR) tierName = "3-Year Lock (1095 days)";
+        else tierName = "5-Year Lock (1825 days)";
+    }
+
+    /**
+     * @notice Returns the on-chain zkVM execution environment metadata.
+     *         Every transaction in this contract is automatically proven by
+     *         the Nexus zkVM v3.0. This function surfaces that fact on-chain.
+     * @return executionLayer  "NexusEVM"
+     * @return proofSystem     "Nexus zkVM v3.0"
+     * @return prover          "Stwo (StarkWare STARK)"
+     * @return docsUrl         Link to zkVM documentation
+     */
+    function zkVMInfo()
+        external
+        pure
+        returns (
+            string memory executionLayer,
+            string memory proofSystem,
+            string memory prover,
+            string memory docsUrl
+        )
+    {
+        return (EXECUTION_LAYER, PROOF_SYSTEM, PROOF_PROVER, ZKVM_DOCS);
     }
 
     // ══════════════════════════════════════════════════════════════════
