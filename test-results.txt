@@ -1,201 +1,197 @@
+NexVault Protocol
+  Deployment
+    ✓ USDXVault: stores correct token addresses
+    ✓ USDXVault: rejects deploy from non-owner wallet
+    ✓ VaultGenesisBadge: rejects deploy from non-owner wallet
+    ✓ ReferralRegistry: rejects deploy from non-owner wallet
+    ✓ AutoCompounder: rejects deploy from non-owner wallet
+    ✓ All contracts: OWNER constant matches expected address
+    ✓ USDXVault: starts unpaused with zero balances
+  Deposits
+    ✓ accepts a LOCK_1YR deposit and records it correctly
+    ✓ accepts a LOCK_1YR deposit with correct lock end
+    ✓ accepts a LOCK_3YR deposit with correct lock end
+    ✓ accepts a LOCK_5YR deposit with correct lock end
+    ✓ increments totalPrincipal on deposit
+    ✓ pulls USDX from user on deposit
+    ✓ reverts on zero deposit
+    ✓ reverts when vault is paused
+    ✓ allows multiple deposits from the same user
+    ✓ emits Deposited event with correct args
+    ✓ mints genesis badge on first deposit
+    ✓ does NOT mint a second badge on second deposit
+    ✓ sets hasDeposited flag on first deposit only
+  Withdrawals
+    ✓ LOCK_1YR: allows withdrawal after lock expires
+    ✓ LOCK_1YR: reverts withdrawal early attempt
+    ✓ LOCK_1YR: returns correct principal on withdrawal
+    ✓ LOCK_1YR: marks deposit as inactive after withdrawal
+    ✓ LOCK_1YR: decrements totalPrincipal after withdrawal
+    ✓ LOCK_1YR: reverts withdrawal before lock expires
+    ✓ LOCK_1YR: allows withdrawal after lock expires
+    ✓ LOCK_3YR: allows withdrawal after 180 days
+    ✓ LOCK_5YR: allows withdrawal after 5 years
+    ✓ reverts on already-withdrawn deposit
+    ✓ reverts on invalid deposit index
+    ✓ accumulates dev earnings on withdrawal
+    ✓ emits Withdrawn event with correct args
+  Claim Yield
+    ✓ LOCK_1YR: user can claim yield before lock ends, principal stays
+    ✓ LOCK_1YR: claimYield can be called multiple times
+    ✓ LOCK_1YR: claimYield works without cooldown restriction
+    ✓ updates lastYieldAt after claiming
+    ✓ emits YieldClaimed event
+    ✓ dev earnings accumulate on yield claim
+  Compound
+    ✓ user can compound their own deposit
+    ✓ authorized operator can compound for user
+    ✓ unauthorized address cannot compound for another user
+    ✓ increases totalPrincipal after compounding
+    ✓ emits Compounded event
+    ✓ no funds leave the vault when compounding
+  pendingYield
+    ✓ returns zero immediately after deposit
+    ✓ returns positive yield after time passes
+    ✓ LOCK_3YR yields more than LOCK_1YR for same amount and time
+    ✓ LOCK_5YR yields more than LOCK_3YR
+    ✓ totalPendingYield sums all active deposits
+  Admin Functions
+    ✓ owner can pause and unpause deposits
+    ✓ non-owner cannot pause
+    ✓ withdrawals still work while paused
+    ✓ owner can set GYDS address
+    ✓ non-owner cannot set GYDS
+    ✓ owner can set reinvest wallet
+    ✓ owner can authorize and revoke compound operators
+    ✓ setCompoundOperator reverts for zero address
+    ✓ emits EmergencyPauseSet event
+  Dev Earnings
+    ✓ owner can withdraw accumulated dev earnings
+    ✓ non-owner cannot withdraw dev earnings
+    ✓ reverts if requesting more than accumulated earnings
+    ✓ CRITICAL: owner cannot withdraw user principal via dev earnings
+    ✓ emits DevEarningsWithdrawn event
+  GYDS Integration
+    ✓ gydsActive() returns false before setGYDS is called
+    ✓ gydsActive() returns true after setGYDS is called
+    ✓ receiveYield() deposits USDX into vault from registered GYDS address
+    ✓ receiveYield() emits GYDSYieldReceived event
+    ✓ receiveYield() reverts if called by non-GYDS address
+    ✓ receiveYield() reverts before GYDS address is set
+    ✓ receiveYield() reverts on zero amount
+    ✓ GYDS yield increases vault surplus and can fund user withdrawals
+  Vault Health
+    ✓ reports healthy when funded
+    ✓ vaultHealth surplus increases after GYDS yield received
+    ✓ all tiers are locked — no withdrawal before expiry
+  ReferralRegistry
+    ✓ registers referral on first deposit
+    ✓ blocks self-referral silently
+    ✓ does not overwrite existing referral on second deposit
+    ✓ caps referral bonus at 4 referrals (200 bps)
+    ✓ getBonusBps returns 50 per referral
+    ✓ getBonusBps returns 0 for address with no referrals
+    ✓ only authorized vault can call registerReferral
+    ✓ owner can revoke vault authorization
+    ✓ getReferrals returns correct array
+    ✓ getReferralCount returns correct count
+    ✓ emits ReferralRegistered event
+    ✓ referral bonus increases yield earned
+  VaultGenesisBadge
+    ✓ only authorized minter can mint
+    ✓ one badge per wallet — second mint silently fails (try/catch in vault)
+    ✓ hasBadge returns true after mint
+    ✓ genesisPosition is set correctly
+    ✓ originalMinter records who first received the badge
+    ✓ remaining() decreases with each mint
+    ✓ owner can set minter authorization
+    ✓ non-owner cannot set minter authorization
+    ✓ tokenURI returns a valid base64 data URI
+    ✓ emits BadgeMinted event on first deposit
+    ✓ MAX_SUPPLY is 5000
+  AutoCompounder
+    ✓ batchCompound compounds multiple users in one tx
+    ✓ batchCompound reverts on array length mismatch
+    ✓ batchCompound reverts if batch exceeds MAX_BATCH (100)
+    ✓ batchCompound does not revert if one compound fails (silent)
+    ✓ compoundAllForUser iterates all deposits for a user
+    ✓ compoundSingle compounds a specific deposit
+    ✓ anyone can call batchCompound (permissionless keeper)
+    ✓ owner can update vault address in compounder
+    ✓ non-owner cannot update vault address in compounder
+    ✓ MAX_BATCH is 100
+  Security
+    ✓ CRITICAL: principal is protected — vault cannot pay more than it holds
+    ✓ reentrancy guard: double-call to withdraw is blocked
+    ✓ attacker cannot call admin functions
+    ✓ cannot withdraw from another user's deposit
+    ✓ deposit does not revert even if badge mint fails (badge already held)
+    ✓ tierAPY view returns correct values
+    ✓ tierLockDuration view returns correct values
+  Lock Is Final
+    ✓ LOCK_IS_FINAL constant is true
+    ✓ LOCK_1YR: reverts 1 second before unlock
+    ✓ LOCK_1YR: allows withdrawal at exactly lockEndsAt
+    ✓ LOCK_3YR: reverts at 1-year mark (only 1/3 through)
+    ✓ LOCK_3YR: reverts at 2-year mark (only 2/3 through)
+    ✓ LOCK_3YR: reverts 1 second before unlock
+    ✓ LOCK_3YR: allows withdrawal at exactly lockEndsAt
+    ✓ LOCK_5YR: reverts at 1-year mark
+    ✓ LOCK_5YR: reverts at 3-year mark (LOCK_3YR amount of time)
+    ✓ LOCK_5YR: reverts at 4-year mark
+    ✓ LOCK_5YR: reverts 1 second before unlock
+    ✓ LOCK_5YR: allows withdrawal at exactly lockEndsAt
+    ✓ OWNER CANNOT unlock any deposit early — admin has no bypass
+    ✓ ATTACKER CANNOT unlock or withdraw another user's deposit
+    ✓ StillLocked error includes the unlock timestamp
+    ✓ multiple deposits with different tiers lock independently
+  View Functions — Lock & zkVM
+    ✓ isLocked: returns true during lock period
+    ✓ isLocked: returns false after lock expires
+    ✓ isLocked: returns false for non-existent deposit index
+    ✓ isLocked: returns false after withdrawal (inactive deposit)
+    ✓ timeUntilUnlock: returns ~LOCK_1YR immediately after deposit
+    ✓ timeUntilUnlock: decreases as time passes
+    ✓ timeUntilUnlock: returns 0 after lock expires
+    ✓ timeUntilUnlock: returns 0 for invalid deposit index
+    ✓ lockInfo: returns correct struct for LOCK_1YR deposit
+    ✓ lockInfo: returns correct struct for LOCK_3YR deposit
+    ✓ lockInfo: returns correct struct for LOCK_5YR deposit
+    ✓ lockInfo: shows unlocked=true and secondsLeft=0 after expiry
+    ✓ zkVMInfo: returns correct execution layer string
+    ✓ zkVMInfo: returns correct proof system string
+    ✓ zkVMInfo: returns Stwo prover string
+    ✓ zkVMInfo: returns nexus.xyz docs URL
+    ✓ EXECUTION_LAYER constant is 'NexusEVM'
+    ✓ PROOF_SYSTEM constant is 'Nexus zkVM v3.0'
+  Cross-User Isolation
+    ✓ user cannot withdraw another user's deposit by index guessing
+    ✓ user cannot claim yield on another user's deposit
+    ✓ each user's deposit count is tracked independently
+    ✓ totalPrincipal correctly tracks multiple users
+    ✓ withdrawing one user's deposit does not affect another's principal
+    ✓ user1's pending yield does not bleed into user2's pending yield
+    ✓ hasDeposited flag is per-user
+  Yield Math Precision
+    ✓ LOCK_1YR: full-year yield matches formula exactly
+    ✓ LOCK_3YR yields more than LOCK_1YR at same elapsed time
+    ✓ LOCK_5YR yields more than LOCK_3YR at same elapsed time
+    ✓ dev cut is exactly 10% of raw yield
+    ✓ yield accrual rate is proportional to principal
+    ✓ compounding increases principal and future yield
+  Full Lifecycle — Mainnet Readiness
+    ✓ complete 1-year lifecycle: deposit → compound × 3 → claim → withdraw
+    ✓ five users with different tiers, all unlock correctly
+    ✓ vault health stays healthy throughout all operations
+    ✓ GYDS yield flow: deposit → GYDS funds vault → user withdraws with full yield
+    ✓ GYDS receiveYield reverts with custom error NotGYDS for wrong caller
+    ✓ GYDS receiveYield reverts with GYDSZeroAmount on zero
+    ✓ GYDS receiveYield reverts with GYDSNotConfigured before setGYDS
+    ✓ AutoCompounder: reverts with custom errors instead of require strings
+    ✓ AutoCompounder: array mismatch reverts with custom error
+    ✓ badge NFT metadata includes zkVM proof system attribute
+    ✓ badge EXECUTION_LAYER constant is NexusEVM
+    ✓ badge PROOF_SYSTEM constant is Nexus zkVM v3.0
+    ✓ registry EXECUTION_LAYER and PROOF_SYSTEM constants match vault
 
-
-  NexVault Protocol
-    Deployment
-      ✔ USDXVault: stores correct token addresses
-      ✔ USDXVault: rejects deploy from non-owner wallet
-      ✔ VaultGenesisBadge: rejects deploy from non-owner wallet
-      ✔ ReferralRegistry: rejects deploy from non-owner wallet
-      ✔ AutoCompounder: rejects deploy from non-owner wallet
-      ✔ All contracts: OWNER constant matches expected address
-      ✔ USDXVault: starts unpaused with zero balances
-    Deposits
-      ✔ accepts a LOCK_1YR deposit and records it correctly
-      ✔ accepts a LOCK_1YR deposit with correct lock end
-      ✔ accepts a LOCK_3YR deposit with correct lock end
-      ✔ accepts a LOCK_5YR deposit with correct lock end
-      ✔ increments totalPrincipal on deposit
-      ✔ pulls USDX from user on deposit
-      ✔ reverts on zero deposit
-      ✔ reverts when vault is paused
-      ✔ allows multiple deposits from the same user
-      ✔ emits Deposited event with correct args
-      ✔ mints genesis badge on first deposit
-      ✔ does NOT mint a second badge on second deposit
-      ✔ sets hasDeposited flag on first deposit only
-    Withdrawals
-      ✔ LOCK_1YR: allows withdrawal after lock expires
-      ✔ LOCK_1YR: reverts withdrawal early attempt
-      ✔ LOCK_1YR: returns correct principal on withdrawal
-      ✔ LOCK_1YR: marks deposit as inactive after withdrawal
-      ✔ LOCK_1YR: decrements totalPrincipal after withdrawal
-      ✔ LOCK_1YR: reverts withdrawal before lock expires
-      ✔ LOCK_1YR: allows withdrawal after lock expires
-      ✔ LOCK_3YR: allows withdrawal after 180 days
-      ✔ LOCK_5YR: allows withdrawal after 5 years
-      ✔ reverts on already-withdrawn deposit
-      ✔ reverts on invalid deposit index
-      ✔ accumulates dev earnings on withdrawal
-      ✔ emits Withdrawn event with correct args
-    Claim Yield
-      ✔ LOCK_1YR: user can claim yield before lock ends, principal stays
-      ✔ LOCK_1YR: claimYield can be called multiple times
-      ✔ LOCK_1YR: claimYield works without cooldown restriction
-      ✔ updates lastYieldAt after claiming
-      ✔ emits YieldClaimed event
-      ✔ dev earnings accumulate on yield claim
-    Compound
-      ✔ user can compound their own deposit
-      ✔ authorized operator can compound for user
-      ✔ unauthorized address cannot compound for another user
-      ✔ increases totalPrincipal after compounding
-      ✔ emits Compounded event
-      ✔ no funds leave the vault when compounding
-    pendingYield
-      ✔ returns zero immediately after deposit
-      ✔ returns positive yield after time passes
-      ✔ LOCK_3YR yields more than LOCK_1YR for same amount and time
-      ✔ LOCK_5YR yields more than LOCK_3YR
-      ✔ totalPendingYield sums all active deposits
-    Admin Functions
-      ✔ owner can pause and unpause deposits
-      ✔ non-owner cannot pause
-      ✔ withdrawals still work while paused
-      ✔ owner can set GYDS address
-      ✔ non-owner cannot set GYDS
-      ✔ owner can set reinvest wallet
-      ✔ owner can authorize and revoke compound operators
-      ✔ setCompoundOperator reverts for zero address
-      ✔ emits EmergencyPauseSet event
-    Dev Earnings
-      ✔ owner can withdraw accumulated dev earnings
-      ✔ non-owner cannot withdraw dev earnings
-      ✔ reverts if requesting more than accumulated earnings
-      ✔ CRITICAL: owner cannot withdraw user principal via dev earnings
-      ✔ emits DevEarningsWithdrawn event
-    GYDS Integration
-      ✔ gydsActive() returns false before setGYDS is called
-      ✔ gydsActive() returns true after setGYDS is called
-      ✔ receiveYield() deposits USDX into vault from registered GYDS address
-      ✔ receiveYield() emits GYDSYieldReceived event
-      ✔ receiveYield() reverts if called by non-GYDS address
-      ✔ receiveYield() reverts before GYDS address is set
-      ✔ receiveYield() reverts on zero amount
-      ✔ GYDS yield increases vault surplus and can fund user withdrawals
-    Vault Health
-      ✔ reports healthy when funded
-      ✔ vaultHealth surplus increases after GYDS yield received
-      ✔ all tiers are locked — no withdrawal before expiry
-    ReferralRegistry
-      ✔ registers referral on first deposit
-      ✔ blocks self-referral silently
-      ✔ does not overwrite existing referral on second deposit
-      ✔ caps referral bonus at 4 referrals (200 bps)
-      ✔ getBonusBps returns 50 per referral
-      ✔ getBonusBps returns 0 for address with no referrals
-      ✔ only authorized vault can call registerReferral
-      ✔ owner can revoke vault authorization
-      ✔ getReferrals returns correct array
-      ✔ getReferralCount returns correct count
-      ✔ emits ReferralRegistered event
-      ✔ referral bonus increases yield earned
-    VaultGenesisBadge
-      ✔ only authorized minter can mint
-      ✔ one badge per wallet — second mint silently fails (try/catch in vault)
-      ✔ hasBadge returns true after mint
-      ✔ genesisPosition is set correctly
-      ✔ originalMinter records who first received the badge
-      ✔ remaining() decreases with each mint
-      ✔ owner can set minter authorization
-      ✔ non-owner cannot set minter authorization
-      ✔ tokenURI returns a valid base64 data URI
-      ✔ emits BadgeMinted event on first deposit
-      ✔ MAX_SUPPLY is 5000
-    AutoCompounder
-      ✔ batchCompound compounds multiple users in one tx
-      ✔ batchCompound reverts on array length mismatch
-      ✔ batchCompound reverts if batch exceeds MAX_BATCH (100)
-      ✔ batchCompound does not revert if one compound fails (silent)
-      ✔ compoundAllForUser iterates all deposits for a user
-      ✔ compoundSingle compounds a specific deposit
-      ✔ anyone can call batchCompound (permissionless keeper)
-      ✔ owner can update vault address in compounder
-      ✔ non-owner cannot update vault address in compounder
-      ✔ MAX_BATCH is 100
-    Security
-      ✔ CRITICAL: principal is protected — vault cannot pay more than it holds
-      ✔ reentrancy guard: double-call to withdraw is blocked
-      ✔ attacker cannot call admin functions
-      ✔ cannot withdraw from another user's deposit
-      ✔ deposit does not revert even if badge mint fails (badge already held)
-      ✔ tierAPY view returns correct values
-      ✔ tierLockDuration view returns correct values
-    Lock Is Final
-      ✔ LOCK_IS_FINAL constant is true
-      ✔ LOCK_1YR: reverts 1 second before unlock
-      ✔ LOCK_1YR: allows withdrawal at exactly lockEndsAt
-      ✔ LOCK_3YR: reverts at 1-year mark (only 1/3 through)
-      ✔ LOCK_3YR: reverts at 2-year mark (only 2/3 through)
-      ✔ LOCK_3YR: reverts 1 second before unlock
-      ✔ LOCK_3YR: allows withdrawal at exactly lockEndsAt
-      ✔ LOCK_5YR: reverts at 1-year mark
-      ✔ LOCK_5YR: reverts at 3-year mark (LOCK_3YR amount of time)
-      ✔ LOCK_5YR: reverts at 4-year mark
-      ✔ LOCK_5YR: reverts 1 second before unlock
-      ✔ LOCK_5YR: allows withdrawal at exactly lockEndsAt
-      ✔ OWNER CANNOT unlock any deposit early — admin has no bypass
-      ✔ ATTACKER CANNOT unlock or withdraw another user's deposit
-      ✔ StillLocked error includes the unlock timestamp
-      ✔ multiple deposits with different tiers lock independently
-    View Functions — Lock & zkVM
-      ✔ isLocked: returns true during lock period
-      ✔ isLocked: returns false after lock expires
-      ✔ isLocked: returns false for non-existent deposit index
-      ✔ isLocked: returns false after withdrawal (inactive deposit)
-      ✔ timeUntilUnlock: returns ~LOCK_1YR immediately after deposit
-      ✔ timeUntilUnlock: decreases as time passes
-      ✔ timeUntilUnlock: returns 0 after lock expires
-      ✔ timeUntilUnlock: returns 0 for invalid deposit index
-      ✔ lockInfo: returns correct struct for LOCK_1YR deposit
-      ✔ lockInfo: returns correct struct for LOCK_3YR deposit
-      ✔ lockInfo: returns correct struct for LOCK_5YR deposit
-      ✔ lockInfo: shows unlocked=true and secondsLeft=0 after expiry
-      ✔ zkVMInfo: returns correct execution layer string
-      ✔ zkVMInfo: returns correct proof system string
-      ✔ zkVMInfo: returns Stwo prover string
-      ✔ zkVMInfo: returns nexus.xyz docs URL
-      ✔ EXECUTION_LAYER constant is 'NexusEVM'
-      ✔ PROOF_SYSTEM constant is 'Nexus zkVM v3.0'
-    Cross-User Isolation
-      ✔ user cannot withdraw another user's deposit by index guessing
-      ✔ user cannot claim yield on another user's deposit
-      ✔ each user's deposit count is tracked independently
-      ✔ totalPrincipal correctly tracks multiple users
-      ✔ withdrawing one user's deposit does not affect another's principal
-      ✔ user1's pending yield does not bleed into user2's pending yield
-      ✔ hasDeposited flag is per-user
-    Yield Math Precision
-      ✔ LOCK_1YR: full-year yield matches formula exactly
-      ✔ LOCK_3YR yields more than LOCK_1YR at same elapsed time
-      ✔ LOCK_5YR yields more than LOCK_3YR at same elapsed time
-      ✔ dev cut is exactly 10% of raw yield
-      ✔ yield accrual rate is proportional to principal
-      ✔ compounding increases principal and future yield
-    Full Lifecycle — Mainnet Readiness
-      ✔ complete 1-year lifecycle: deposit → compound × 3 → claim → withdraw
-      ✔ five users with different tiers, all unlock correctly
-      ✔ vault health stays healthy throughout all operations
-      ✔ GYDS yield flow: deposit → GYDS funds vault → user withdraws with full yield
-      ✔ GYDS receiveYield reverts with custom error NotGYDS for wrong caller
-      ✔ GYDS receiveYield reverts with GYDSZeroAmount on zero
-      ✔ GYDS receiveYield reverts with GYDSNotConfigured before setGYDS
-      ✔ AutoCompounder: reverts with custom errors instead of require strings
-      ✔ AutoCompounder: array mismatch reverts with custom error
-      ✔ badge NFT metadata includes zkVM proof system attribute
-      ✔ badge EXECUTION_LAYER constant is NexusEVM
-      ✔ badge PROOF_SYSTEM constant is Nexus zkVM v3.0
-      ✔ registry EXECUTION_LAYER and PROOF_SYSTEM constants match vault
-
-
-  175 passing (7s)
-
+175 passing (9s)
