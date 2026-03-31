@@ -202,15 +202,16 @@ contract USDXVault is ReentrancyGuard {
     error ZeroAddress();
     error InvalidDepositIndex();
     error DepositNotActive();
-    error StillLocked(uint256 unlocksAt);   // lock period has not expired
+    error StillLocked(uint256 unlocksAt);        // lock period has not expired
     error InsufficientYieldBalance();
     error ExceedsDevEarnings();
     error WouldDipIntoPrincipal();
     error AmountOverflow();
     error MustDeployFromOwner();
-    error NotGYDS();                         // caller is not the registered GYDS address
-    error GYDSNotConfigured();               // GYDS address has not been set yet
-    error GYDSZeroAmount();                  // receiveYield called with zero amount
+    error NotGYDS();                              // caller is not the registered GYDS address
+    error GYDSNotConfigured();                    // GYDS address has not been set yet
+    error GYDSZeroAmount();                       // receiveYield called with zero amount
+    error UnauthorizedCompoundCaller();           // caller is neither the user nor an authorized operator
 
     // ── Modifiers ──────────────────────────────────────────────────────
     modifier onlyOwner() {
@@ -371,16 +372,17 @@ contract USDXVault is ReentrancyGuard {
         Tier    tier,
         address referrer
     ) external nonReentrant whenNotPaused {
-        if (amount == 0)                       revert ZeroAmount();
-        if (amount > type(uint128).max)        revert AmountOverflow();
+        // ── CHECKS ────────────────────────────────────────────────────
+        if (amount == 0)                 revert ZeroAmount();
+        if (amount > type(uint128).max)  revert AmountOverflow();
 
-        // ── Interaction first: pull USDX from user ────────────────────
-        // (Safe — transferFrom only transfers what user approved)
-        usdx.safeTransferFrom(msg.sender, address(this), amount);
-
-        // ── Effects ───────────────────────────────────────────────────
-        uint64 now_     = uint64(block.timestamp);
-        uint64 lockEnd  = _lockEnd(tier, now_);
+        // ── EFFECTS ───────────────────────────────────────────────────
+        // All state changes occur before the external token transfer.
+        // This follows strict CEI (Checks-Effects-Interactions) order.
+        // If safeTransferFrom reverts below, Solidity rolls back all
+        // state changes here automatically.
+        uint64 now_    = uint64(block.timestamp);
+        uint64 lockEnd = _lockEnd(tier, now_);
 
         _deposits[msg.sender].push(Deposit({
             principal:   uint128(amount),
@@ -394,17 +396,27 @@ contract USDXVault is ReentrancyGuard {
         totalPrincipal += amount;
         uint256 depositIndex = _deposits[msg.sender].length - 1;
 
-        // ── First-deposit actions (both wrapped in try/catch) ─────────
-        if (!hasDeposited[msg.sender]) {
+        // Track first-deposit status before any external calls
+        bool isFirstDeposit = !hasDeposited[msg.sender];
+        if (isFirstDeposit) {
             hasDeposited[msg.sender] = true;
+        }
 
-            // Register referral — never blocks deposit
+        // ── INTERACTION ───────────────────────────────────────────────
+        // Token transfer is the primary external interaction.
+        // nonReentrant prevents any ERC20 hook from reentering this function.
+        // SafeERC20 reverts on failed transfer, rolling back all effects above.
+        usdx.safeTransferFrom(msg.sender, address(this), amount);
+
+        // ── FIRST-DEPOSIT SIDE EFFECTS ────────────────────────────────
+        // Both wrapped in try/catch: failure never blocks a deposit.
+        // These external calls execute after transfer succeeds —
+        // nonReentrant still guards against reentrant callbacks.
+        if (isFirstDeposit) {
             if (referrer != address(0) && referrer != msg.sender) {
                 try referralRegistry.registerReferral(msg.sender, referrer) {}
                 catch {}
             }
-
-            // Mint genesis badge — never blocks deposit
             try genesisBadge.mint(msg.sender) returns (uint256 tokenId) {
                 emit GenesisBadgeMinted(msg.sender, tokenId);
             } catch {}
@@ -494,7 +506,7 @@ contract USDXVault is ReentrancyGuard {
         uint256 depositIndex
     ) external nonReentrant {
         if (msg.sender != user && !isCompoundOperator[msg.sender])
-            revert NotOwner();
+            revert UnauthorizedCompoundCaller();
 
         Deposit storage d = _getActiveDeposit(user, depositIndex);
 
@@ -726,6 +738,9 @@ contract USDXVault is ReentrancyGuard {
 
     /**
      * @dev Fetch and validate an active deposit. Reverts with descriptive errors.
+     * @param user  The depositor's wallet address.
+     * @param index The index into the user's deposit array.
+     * @return d    Storage reference to the validated deposit.
      */
     function _getActiveDeposit(address user, uint256 index)
         internal
@@ -744,6 +759,20 @@ contract USDXVault is ReentrancyGuard {
      *      Formula: principal × (APY + referralBonus) × elapsed
      *               ─────────────────────────────────────────────
      *               SECONDS_PER_YEAR × BPS_BASE
+     *
+     *      NOTE ON block.timestamp: yield calculations use block.timestamp
+     *      for elapsed time. Miners can manipulate this by ~±15 seconds.
+     *      This is acceptable here because:
+     *      (a) yield accrues continuously — no threshold cliff to exploit
+     *      (b) 15 seconds of yield manipulation on any realistic deposit
+     *          is negligible (< 0.00005% of principal for max APY)
+     *      (c) lock expiry checks also use block.timestamp — the same
+     *          15-second window applies symmetrically to both accrual and
+     *          unlock, providing no economic exploit surface.
+     *
+     * @param user The depositor's wallet (used to look up referral bonus).
+     * @param d    Storage reference to the deposit record.
+     * @return     Raw yield amount in USDX (6 decimals), before dev cut.
      */
     function _calcYield(address user, Deposit storage d)
         internal
@@ -755,23 +784,36 @@ contract USDXVault is ReentrancyGuard {
 
         uint256 apy = _tierAPY(d.tier);
 
-        // Add referral bonus (silent fail — never reverts)
+        // Add referral bonus — external view call wrapped in try/catch.
+        // getBonusBps is a pure view; try/catch handles any unexpected revert.
         try referralRegistry.getBonusBps(user) returns (uint16 bonus) {
             apy += bonus;
         } catch {}
 
         // yield = principal × apy × elapsed / (SECONDS_PER_YEAR × BPS_BASE)
+        // Multiplication order prevents overflow: principal (uint128, max ~3.4e38)
+        // × apy (max 644 bps with full referral bonus) × elapsed (max ~1.5e8 for
+        // 5 years) = max ~3.3e51, which fits in uint256 (max ~1.15e77).
         return uint256(d.principal) * apy * elapsed / (SECONDS_PER_YEAR * BPS_BASE);
     }
 
-    /// @dev APY basis points for a tier.
+    /**
+     * @dev APY basis points for a tier.
+     * @param tier The yield tier enum value.
+     * @return     APY in basis points (380, 410, or 444).
+     */
     function _tierAPY(Tier tier) internal pure returns (uint256) {
         if (tier == Tier.LOCK_1YR) return APY_1YR;
         if (tier == Tier.LOCK_3YR) return APY_3YR;
         return APY_5YR;
     }
 
-    /// @dev Lock end timestamp for a tier.
+    /**
+     * @dev Lock expiry timestamp for a given tier and deposit time.
+     * @param tier The yield tier enum value.
+     * @param now_ The deposit timestamp (block.timestamp at deposit).
+     * @return     Unix timestamp when the lock expires.
+     */
     function _lockEnd(Tier tier, uint64 now_) internal pure returns (uint64) {
         if (tier == Tier.LOCK_1YR) return now_ + uint64(LOCK_1YR);
         if (tier == Tier.LOCK_3YR) return now_ + uint64(LOCK_3YR);

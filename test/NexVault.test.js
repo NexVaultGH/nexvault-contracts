@@ -462,7 +462,7 @@ describe("NexVault Protocol", function () {
 
       await expect(
         vault.connect(user2).compoundForUser(user1.address, 0)
-      ).to.be.revertedWithCustomError(vault, "NotOwner");
+      ).to.be.revertedWithCustomError(vault, "UnauthorizedCompoundCaller");
 
       // But authorized compounder works
       await vault.connect(owner).setCompoundOperator(user2.address, true);
@@ -477,7 +477,7 @@ describe("NexVault Protocol", function () {
 
       await expect(
         vault.connect(attacker).compoundForUser(user1.address, 0)
-      ).to.be.revertedWithCustomError(vault, "NotOwner");
+      ).to.be.revertedWithCustomError(vault, "UnauthorizedCompoundCaller");
     });
 
     it("increases totalPrincipal after compounding", async function () {
