@@ -2,14 +2,14 @@
 
 [![Nexus zkVM](https://img.shields.io/badge/Nexus_zkVM-v3.0-8B5CF6?style=flat-square&logo=ethereum)](https://docs.nexus.xyz/zkvm)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.25-363636?style=flat-square&logo=solidity)](https://docs.soliditylang.org)
-[![Tests](https://img.shields.io/badge/Tests-175_passing-22c55e?style=flat-square)](./test)
+[![Tests](https://img.shields.io/badge/Tests-174_passing-22c55e?style=flat-square)](./test)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](./LICENSE)
 
 USDX Savings Vault · Built on Nexus Blockchain · Up to 4.44% APY — U.S. Treasury Backed
 
 ---
 
-## 175 / 175 Tests Passing
+## 174 / 174 Tests Passing
 
 ```
 NexVault Protocol
@@ -19,7 +19,7 @@ NexVault Protocol
     Claim Yield          6 passing
     Compound             6 passing
     pendingYield         5 passing
-    Admin Functions      8 passing
+    Admin Functions      7 passing
     Dev Earnings         5 passing
     Vault Health         3 passing
     ReferralRegistry    12 passing
@@ -32,7 +32,7 @@ NexVault Protocol
     Yield Math Precision 6 passing
     Full Lifecycle      20 passing
 
-  175 passing (7s)
+  174 passing (8s)
 ```
 
 [→ View full test output](./test-results.txt)
@@ -102,7 +102,7 @@ cp .env.example .env
 
 ```bash
 npx hardhat compile   # must show 0 errors
-npx hardhat test      # all 175 tests must pass
+npx hardhat test      # all 174 tests must pass
 ```
 
 ## Deploy to Nexus Mainnet
@@ -115,7 +115,7 @@ See [`deploy documents.md`](./deploy%20documents.md) for full deployment guide i
 
 ## Security
 
-- 175 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, view functions, cross-user isolation, yield math, and full lifecycle integration
+- 174 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, view functions, cross-user isolation, yield math, and full lifecycle integration
 - Certik audit-ready: CEI pattern in deposit(), custom errors, complete NatSpec
 - OpenZeppelin ReentrancyGuard on all state-changing functions
 - Strict CEI (Checks-Effects-Interactions) ordering — state changes before external calls
