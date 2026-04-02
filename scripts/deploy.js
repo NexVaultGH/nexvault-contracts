@@ -14,7 +14,6 @@ const hre = require("hardhat");
 const OWNER_WALLET  = "0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0";
 const USDX_ADDRESS  = process.env.USDX_ADDRESS  || "";
 const GYDS_ADDRESS  = process.env.GYDS_ADDRESS  || "";
-const REINVEST_WALLET = process.env.REINVEST_WALLET || "";
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
@@ -43,7 +42,6 @@ async function main() {
   console.log("💰 Balance:", hre.ethers.formatEther(balance), "NEXUS");
   console.log("📍 USDX:   ", USDX_ADDRESS);
   console.log("📍 GYDS:   ", GYDS_ADDRESS || "(set later)");
-  console.log("📍 Reinvest:", REINVEST_WALLET || "(set later)");
   console.log("");
 
   // ══════════════════════════════════════════════════════════════════
@@ -115,15 +113,6 @@ async function main() {
     console.log("   ⏭  Vault: GYDS not set — run setGYDS() when address known");
   }
 
-  // Set reinvestment wallet if provided
-  if (REINVEST_WALLET) {
-    tx = await vault.setReinvestWallet(REINVEST_WALLET);
-    await tx.wait();
-    console.log("   ✅ Vault: reinvestment wallet set");
-  } else {
-    console.log("   ⏭  Vault: reinvest wallet not set — add to .env and call setReinvestWallet()");
-  }
-
   // ══════════════════════════════════════════════════════════════════
   //  STEP 6 — Verification checks
   // ══════════════════════════════════════════════════════════════════
@@ -173,7 +162,6 @@ async function main() {
       AutoCompounder: compounderAddr,
       USDX: USDX_ADDRESS,
       GYDS: GYDS_ADDRESS || "NOT_SET",
-      ReinvestWallet: REINVEST_WALLET || "NOT_SET",
     },
   };
   fs.writeFileSync(

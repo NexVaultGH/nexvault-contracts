@@ -596,11 +596,6 @@ describe("NexVault Protocol", function () {
       ).to.be.revertedWithCustomError(vault, "NotOwner");
     });
 
-    it("owner can set reinvest wallet", async function () {
-      await vault.connect(owner).setReinvestWallet(user1.address);
-      expect(await vault.reinvestWallet()).to.equal(user1.address);
-    });
-
     it("owner can authorize and revoke compound operators", async function () {
       await vault.connect(owner).setCompoundOperator(user2.address, true);
       expect(await vault.isCompoundOperator(user2.address)).to.equal(true);
@@ -1104,8 +1099,6 @@ describe("NexVault Protocol", function () {
         .to.be.revertedWithCustomError(vault, "NotOwner");
       await expect(vault.connect(attacker).setGYDS(attacker.address))
         .to.be.revertedWithCustomError(vault, "NotOwner");
-      await expect(vault.connect(attacker).setReinvestWallet(attacker.address))
-        .to.be.revertedWithCustomError(vault, "NotOwner");
       await expect(vault.connect(attacker).withdrawDevEarnings(1n))
         .to.be.revertedWithCustomError(vault, "NotOwner");
     });
@@ -1229,7 +1222,7 @@ describe("NexVault Protocol", function () {
     it("OWNER CANNOT unlock any deposit early — admin has no bypass", async function () {
       // There is no owner function that can force a withdrawal or remove the lock.
       // The owner's only powers: setPaused (only blocks deposits), setGYDS,
-      // setReinvestWallet, setCompoundOperator, withdrawDevEarnings.
+      // setCompoundOperator, withdrawDevEarnings.
       // None of these can unlock a user deposit.
       await vault.connect(user1).deposit(toUSDX(1000), TIERS.LOCK_1YR, ethers.ZeroAddress);
       await time.increase(86400); // 1 day

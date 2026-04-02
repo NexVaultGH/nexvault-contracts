@@ -61,7 +61,6 @@ NexVault Protocol
     ✓ withdrawals still work while paused
     ✓ owner can set GYDS address
     ✓ non-owner cannot set GYDS
-    ✓ owner can set reinvest wallet
     ✓ owner can authorize and revoke compound operators
     ✓ setCompoundOperator reverts for zero address
     ✓ emits EmergencyPauseSet event
@@ -194,4 +193,4 @@ NexVault Protocol
     ✓ badge PROOF_SYSTEM constant is Nexus zkVM v3.0
     ✓ registry EXECUTION_LAYER and PROOF_SYSTEM constants match vault
 
-175 passing (9s)
+174 passing (9s)

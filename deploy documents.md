@@ -15,7 +15,6 @@ NEXUS_CHAIN_ID=                        # from Nexus docs at launch
 PRIVATE_KEY=                           # private key of 0x44e0...8ba0
 USDX_ADDRESS=                          # official USDX from Nexus docs
 GYDS_ADDRESS=                          # official GYDS from Nexus docs
-REINVEST_WALLET=                       # your reinvestment wallet address
 ```
 
 ## Test Locally First

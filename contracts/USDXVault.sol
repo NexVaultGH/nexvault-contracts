@@ -149,7 +149,6 @@ contract USDXVault is ReentrancyGuard {
 
     // ── Configurable addresses (set after deploy) ──────────────────────
     address public gyds;           // GYDS yield distributor (future hook)
-    address public reinvestWallet; // 5% mission reinvestment wallet
 
     // ── Vault state ────────────────────────────────────────────────────
     bool    public paused;              // Emergency pause (deposits only)
@@ -190,7 +189,6 @@ contract USDXVault is ReentrancyGuard {
     event GenesisBadgeMinted(address indexed user, uint256 tokenId);
     event EmergencyPauseSet(bool paused);
     event GYDSSet(address indexed gyds);
-    event ReinvestWalletSet(address indexed wallet);
     event CompoundOperatorSet(address indexed operator, bool authorized);
     event DevEarningsWithdrawn(uint256 amount, address indexed to);
     event GYDSYieldReceived(uint256 amount, address indexed from);
@@ -289,16 +287,6 @@ contract USDXVault is ReentrancyGuard {
      */
     function gydsActive() external view returns (bool) {
         return gyds != address(0);
-    }
-
-    /**
-     * @notice Set the reinvestment wallet (receives 5% of dev earnings).
-     *         Used to fund community reinvestment initiatives.
-     */
-    function setReinvestWallet(address _wallet) external onlyOwner {
-        if (_wallet == address(0)) revert ZeroAddress();
-        reinvestWallet = _wallet;
-        emit ReinvestWalletSet(_wallet);
     }
 
     /**
