@@ -257,9 +257,9 @@ contract VaultGenesisBadge is ERC721 {
 
     function _positionLabel(uint256 pos) internal pure returns (string memory) {
         if (pos <= 10)   return "FOUNDING TEN";
-        if (pos <= 100)  return "GENESIS HUNDRED";
-        if (pos <= 500)  return "GENESIS FIVE HUNDRED";
-        if (pos <= 1000) return "GENESIS THOUSAND";
+        if (pos <= 100)  return "VAULT SENTINEL";
+        if (pos <= 500)  return "VAULT PIONEER";
+        if (pos <= 1000) return "VAULT ARCHITECT";
         return "GENESIS";
     }
 
@@ -277,5 +277,21 @@ contract VaultGenesisBadge is ERC721 {
             value >>= 4;
         }
         return string(buffer);
+    }
+
+    // ── Soulbound — block ALL transfers ───────────────────────────────
+    // Badges are non-transferable forever. Only minting (from == address(0))
+    // is allowed. Any attempt to transfer reverts.
+    function _update(
+        address to,
+        uint256 tokenId,
+        address auth
+    ) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        // Allow minting (from == address(0)), block everything else
+        if (from != address(0)) {
+            revert("Soulbound: non-transferable");
+        }
+        return super._update(to, tokenId, auth);
     }
 }
