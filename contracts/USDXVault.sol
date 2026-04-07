@@ -154,6 +154,8 @@ contract USDXVault is ReentrancyGuard {
     bool    public paused;              // Emergency pause (deposits only)
     uint256 public totalPrincipal;      // Sum of all active deposit principals
     uint256 public devEarningsBalance;  // Accumulated dev earnings (claimable)
+    uint256 public maxTotalPrincipal;   // TVL cap — 0 means unlimited
+    uint256 public minDepositAmount;    // Minimum deposit — 0 means no minimum
 
     // ── Per-user state ─────────────────────────────────────────────────
     mapping(address => Deposit[]) private _deposits;
@@ -210,6 +212,9 @@ contract USDXVault is ReentrancyGuard {
     error GYDSNotConfigured();                    // GYDS address has not been set yet
     error GYDSZeroAmount();                       // receiveYield called with zero amount
     error UnauthorizedCompoundCaller();           // caller is neither the user nor an authorized operator
+    error GYDSAlreadySet();                        // GYDS can only be set once
+    error TVLCapReached();                         // total deposits exceed max allowed
+    error BelowMinimumDeposit();                   // deposit below minimum threshold
 
     // ── Modifiers ──────────────────────────────────────────────────────
     modifier onlyOwner() {
@@ -258,6 +263,7 @@ contract USDXVault is ReentrancyGuard {
      */
     function setGYDS(address _gyds) external onlyOwner {
         if (_gyds == address(0)) revert ZeroAddress();
+        if (gyds != address(0)) revert GYDSAlreadySet();
         gyds = _gyds;
         emit GYDSSet(_gyds);
     }
@@ -312,6 +318,24 @@ contract USDXVault is ReentrancyGuard {
     }
 
     /**
+     * @notice Set the maximum total principal allowed in the vault (TVL cap).
+     *         Set to 0 for unlimited. Prevents vault from accepting more
+     *         deposits than it can reasonably fund yield for.
+     */
+    function setMaxTotalPrincipal(uint256 cap) external onlyOwner {
+        maxTotalPrincipal = cap;
+    }
+
+    /**
+     * @notice Set the minimum deposit amount.
+     *         Prevents dust deposits and referral sybil farming.
+     *         Set to 0 for no minimum.
+     */
+    function setMinDepositAmount(uint256 min) external onlyOwner {
+        minDepositAmount = min;
+    }
+
+    /**
      * @notice Withdraw accumulated dev earnings (10% of all generated yield).
      *
      *         SAFETY GUARANTEE: This function enforces two checks before transfer:
@@ -363,6 +387,8 @@ contract USDXVault is ReentrancyGuard {
         // ── CHECKS ────────────────────────────────────────────────────
         if (amount == 0)                 revert ZeroAmount();
         if (amount > type(uint128).max)  revert AmountOverflow();
+        if (minDepositAmount > 0 && amount < minDepositAmount) revert BelowMinimumDeposit();
+        if (maxTotalPrincipal > 0 && totalPrincipal + amount > maxTotalPrincipal) revert TVLCapReached();
 
         // ── EFFECTS ───────────────────────────────────────────────────
         // All state changes occur before the external token transfer.

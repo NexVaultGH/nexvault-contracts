@@ -64,6 +64,7 @@ contract VaultGenesisBadge is ERC721 {
     error NotOwner();
     error NotMinter();
     error ZeroAddress();
+    error SoulboundNonTransferable();
     error AlreadyHasBadge();
     error SupplyExhausted();
     error TokenDoesNotExist();
@@ -116,6 +117,7 @@ contract VaultGenesisBadge is ERC721 {
      */
     function setMinterAuthorization(address minter) external onlyOwner {
         if (minter == address(0)) revert ZeroAddress();
+        if (authorizedMinter != address(0)) revert("Minter already set");
         authorizedMinter = minter;
         emit MinterSet(minter);
     }
@@ -290,7 +292,7 @@ contract VaultGenesisBadge is ERC721 {
         address from = _ownerOf(tokenId);
         // Allow minting (from == address(0)), block everything else
         if (from != address(0)) {
-            revert("Soulbound: non-transferable");
+            revert SoulboundNonTransferable();
         }
         return super._update(to, tokenId, auth);
     }
