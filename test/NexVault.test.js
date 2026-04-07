@@ -943,9 +943,11 @@ describe("NexVault Protocol", function () {
       expect(await badge.remaining()).to.equal(remainingBefore - 1n);
     });
 
-    it("owner can set minter authorization", async function () {
-      await badge.connect(owner).setMinterAuthorization(user1.address);
-      expect(await badge.authorizedMinter()).to.equal(user1.address);
+    it("owner cannot change minter after initial set (one-shot)", async function () {
+      // Minter was already set in beforeEach — second call must revert
+      await expect(
+        badge.connect(owner).setMinterAuthorization(user1.address)
+      ).to.be.reverted;
     });
 
     it("non-owner cannot set minter authorization", async function () {
