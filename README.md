@@ -2,14 +2,14 @@
 
 [![Nexus zkVM](https://img.shields.io/badge/Nexus_zkVM-v3.0-8B5CF6?style=flat-square&logo=ethereum)](https://docs.nexus.xyz/zkvm)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.25-363636?style=flat-square&logo=solidity)](https://docs.soliditylang.org)
-[![Tests](https://img.shields.io/badge/Tests-174_passing-22c55e?style=flat-square)](./test)
+[![Tests](https://img.shields.io/badge/Tests-229_passing-22c55e?style=flat-square)](./test)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](./LICENSE)
 
 USDX Savings Vault · Built on Nexus Blockchain · Up to 4.44% APY — U.S. Treasury Backed
 
 ---
 
-## 174 / 174 Tests Passing
+## 229 / 229 Tests Passing
 
 ```
 NexVault Protocol
@@ -32,7 +32,19 @@ NexVault Protocol
     Yield Math Precision 6 passing
     Full Lifecycle      20 passing
 
-  174 passing (8s)
+NexCredit
+    Deployment           8 passing
+    Privacy             11 passing
+    No Deposits          3 passing
+    Deposit Strength     5 passing
+    Lock Commitment      5 passing
+    Protocol Loyalty     7 passing
+    Behavioral Excellence 6 passing
+    Score Tier Labels    4 passing
+    Breakdown Integrity  2 passing
+    Critical Invariants  4 passing
+
+  229 passing (15s)
 ```
 
 [→ View full test output](./test-results.txt)
@@ -77,6 +89,7 @@ Solidity (this repo)
 | `AutoCompounder.sol` | Keeper contract — compounds earned yield back into principal |
 | `ReferralRegistry.sol` | Tracks referral relationships — up to +200 bps bonus per depositor |
 | `VaultGenesisBadge.sol` | ERC-721 — mints a Genesis Badge NFT on first deposit (max 5,000 supply) |
+| `NexCredit.sol` | On-chain credit scoring — private 0-1000 score based on deposit history |
 | `MockUSDX.sol` | ERC-20 mock for local testing only — not deployed to mainnet |
 
 ## Architecture
@@ -86,7 +99,8 @@ User
  └─► USDXVault.sol          ← primary entry point
        ├─ ReferralRegistry.sol   ← registers referrer on deposit
        ├─ VaultGenesisBadge.sol  ← mints badge on first deposit
-       └─ AutoCompounder.sol     ← keeper compounds yield periodically
+       ├─ AutoCompounder.sol     ← keeper compounds yield periodically
+       └─ NexCredit.sol          ← reads deposit history, produces credit score
 ```
 
 ## Setup
@@ -102,7 +116,7 @@ cp .env.example .env
 
 ```bash
 npx hardhat compile   # must show 0 errors
-npx hardhat test      # all 174 tests must pass
+npx hardhat test      # all 229 tests must pass
 ```
 
 ## Deploy to Nexus Mainnet
@@ -157,7 +171,7 @@ After deployment, fill NEXCREDIT_ADDRESS in app.html config block.
 
 ## Security
 
-- 174 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, view functions, cross-user isolation, yield math, and full lifecycle integration
+- 229 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, credit scoring, view functions, cross-user isolation, yield math, and full lifecycle integration
 - Certik audit-ready: CEI pattern in deposit(), custom errors, complete NatSpec
 - OpenZeppelin ReentrancyGuard on all state-changing functions
 - Strict CEI (Checks-Effects-Interactions) ordering — state changes before external calls
