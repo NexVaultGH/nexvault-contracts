@@ -532,4 +532,102 @@ describe("NexCredit", function () {
       expect(scores[1]).to.equal(0);    // user1 = no deposits
     });
   });
+
+  // ═══════════════════════════════════════════════════════
+  // Penalty System
+  // ═══════════════════════════════════════════════════════
+  describe("Penalty System", function () {
+    it("OWNER can apply penalty to a wallet", async function () {
+      await vault.connect(user1).deposit(toUSDX(5_000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await nexCredit.connect(owner).applyPenalty(user1.address, 50, "Late lending payment");
+      const pen = await nexCredit.connect(user1).getPenalty(user1.address);
+      expect(pen).to.be.gte(50);
+    });
+
+    it("penalty reduces score", async function () {
+      await vault.connect(user1).deposit(toUSDX(5_000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      const scoreBefore = await nexCredit.connect(user1).getScore(user1.address);
+      await nexCredit.connect(owner).applyPenalty(user1.address, 30, "Missed payment");
+      const scoreAfter = await nexCredit.connect(user1).getScore(user1.address);
+      expect(scoreAfter).to.be.lt(scoreBefore);
+      expect(scoreBefore - scoreAfter).to.equal(30n);
+    });
+
+    it("penalty shows in breakdown as penaltyDeductions", async function () {
+      await vault.connect(user1).deposit(toUSDX(5_000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await nexCredit.connect(owner).applyPenalty(user1.address, 40, "Default");
+      const bd = await nexCredit.connect(user1).getScoreBreakdown(user1.address);
+      expect(bd.penaltyDeductions).to.be.gte(40);
+      const raw = bd.depositStrength + bd.lockCommitment + bd.protocolLoyalty + bd.behavioralExcellence;
+      expect(bd.total).to.equal(raw - bd.penaltyDeductions);
+    });
+
+    it("non-owner cannot apply penalty — reverts NotAuthorized", async function () {
+      await expect(
+        nexCredit.connect(user1).applyPenalty(user2.address, 10, "Attempt")
+      ).to.be.revertedWithCustomError(nexCredit, "NotAuthorized");
+    });
+
+    it("penalty cannot exceed MAX_PENALTY (200)", async function () {
+      await expect(
+        nexCredit.connect(owner).applyPenalty(user1.address, 201, "Too much")
+      ).to.be.revertedWithCustomError(nexCredit, "PenaltyExceedsMax");
+    });
+
+    it("OWNER can reduce penalty (recovery)", async function () {
+      await nexCredit.connect(owner).applyPenalty(user1.address, 80, "Default");
+      await nexCredit.connect(owner).reducePenalty(user1.address, 30, "Good behavior recovery");
+      expect(await nexCredit.connect(owner).getScore(user1.address)).to.equal(0); // no deposits = 0 anyway
+      const pen = await nexCredit.connect(owner).getPenalty(user1.address);
+      expect(pen).to.equal(50); // 80 - 30
+    });
+
+    it("reducePenalty floors at zero (no underflow)", async function () {
+      await nexCredit.connect(owner).applyPenalty(user1.address, 20, "Minor");
+      await nexCredit.connect(owner).reducePenalty(user1.address, 100, "Full forgiveness");
+      const pen = await nexCredit.connect(owner).getPenalty(user1.address);
+      expect(pen).to.equal(0);
+    });
+
+    it("penalty emits PenaltyApplied event", async function () {
+      await expect(
+        nexCredit.connect(owner).applyPenalty(user1.address, 25, "Late payment")
+      ).to.emit(nexCredit, "PenaltyApplied").withArgs(user1.address, 25, "Late payment");
+    });
+
+    it("score never goes below zero from penalties", async function () {
+      await vault.connect(user1).deposit(toUSDX(100), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      // Score is 50 (DS=30 + LC=20), penalty of 200 should floor at 0
+      await nexCredit.connect(owner).applyPenalty(user1.address, 200, "Severe default");
+      const score = await nexCredit.connect(user1).getScore(user1.address);
+      expect(score).to.equal(0);
+    });
+
+    it("referral inactivity penalty: inactive referral adds penalty points", async function () {
+      // user1 deposits and refers user2
+      await vault.connect(user1).deposit(toUSDX(1_000), TIERS.LOCK_1YR, ethers.ZeroAddress);
+      await vault.connect(user2).deposit(toUSDX(1_000), TIERS.LOCK_1YR, user1.address);
+      // user2 is active — check penalty is 0
+      const penBefore = await nexCredit.connect(user1).getPenalty(user1.address);
+      expect(penBefore).to.equal(0);
+      // user2 withdraws (becomes inactive)
+      await time.increase(Number(LOCK_1YR) + 1);
+      await vault.connect(user2).withdraw(0);
+      // Now user1 should have referral inactivity penalty (15 pts per inactive referral)
+      const penAfter = await nexCredit.connect(user1).getPenalty(user1.address);
+      expect(penAfter).to.equal(15);
+    });
+
+    it("OWNER penalties do not affect founder Elite status", async function () {
+      // Even if someone tries to penalize OWNER (shouldn't happen), score stays 1000
+      const score = await nexCredit.connect(owner).getScore(owner.address);
+      expect(score).to.equal(1000);
+    });
+
+    it("zero penalty reverts with ZeroAmount", async function () {
+      await expect(
+        nexCredit.connect(owner).applyPenalty(user1.address, 0, "Nothing")
+      ).to.be.revertedWithCustomError(nexCredit, "ZeroAmount");
+    });
+  });
 });

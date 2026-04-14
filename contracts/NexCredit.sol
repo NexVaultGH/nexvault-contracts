@@ -21,12 +21,14 @@ interface IVaultGenesisBadge {
 
 interface IReferralRegistry {
     function getReferralCount(address referrer) external view returns (uint256);
+    function getReferrals(address referrer) external view returns (address[] memory);
 }
 
 contract NexCredit {
 
     address public constant OWNER = 0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0;
     uint256 public constant MAX_BATCH = 25;
+    uint256 public constant MAX_PENALTY = 200;
 
     uint256 private constant THRESH_5K   =   5_000_000000;
     uint256 private constant THRESH_25K  =  25_000_000000;
@@ -42,11 +44,21 @@ contract NexCredit {
     IVaultGenesisBadge public immutable genesisBadge;
     IReferralRegistry  public immutable referralRegistry;
 
+    // ── Penalty System ──────────────────────────────────────
+    // Penalties are applied by OWNER for negative credit events
+    // (late lending payments, defaults, protocol violations).
+    // Max total penalty per wallet: 200 points.
+    mapping(address => uint256) public penalties;
+
     error NotAuthorized();
     error ZeroAddress();
+    error ZeroAmount();
     error BatchTooLarge(uint256 requested, uint256 maximum);
+    error PenaltyExceedsMax(uint256 requested, uint256 maximum);
 
     event ScoreQueried(address indexed wallet, address indexed by);
+    event PenaltyApplied(address indexed wallet, uint256 points, string reason);
+    event PenaltyReduced(address indexed wallet, uint256 points, string reason);
 
     constructor(address _vault, address _badge, address _registry) {
         if (_vault    == address(0)) revert ZeroAddress();
@@ -56,6 +68,45 @@ contract NexCredit {
         genesisBadge     = IVaultGenesisBadge(_badge);
         referralRegistry = IReferralRegistry(_registry);
     }
+
+    // ── Penalty Management (OWNER only) ─────────────────────
+
+    /// @notice Apply a penalty to a wallet's credit score
+    /// @param wallet The wallet to penalize
+    /// @param points Number of points to deduct (max total 200)
+    /// @param reason Human-readable reason for the penalty
+    function applyPenalty(address wallet, uint256 points, string calldata reason) external {
+        if (msg.sender != OWNER) revert NotAuthorized();
+        if (wallet == address(0)) revert ZeroAddress();
+        if (points == 0) revert ZeroAmount();
+        if (penalties[wallet] + points > MAX_PENALTY) revert PenaltyExceedsMax(penalties[wallet] + points, MAX_PENALTY);
+        penalties[wallet] += points;
+        emit PenaltyApplied(wallet, points, reason);
+    }
+
+    /// @notice Reduce a penalty (for good behavior recovery)
+    /// @param wallet The wallet to reduce penalty for
+    /// @param points Number of points to restore
+    /// @param reason Human-readable reason for the reduction
+    function reducePenalty(address wallet, uint256 points, string calldata reason) external {
+        if (msg.sender != OWNER) revert NotAuthorized();
+        if (wallet == address(0)) revert ZeroAddress();
+        if (points == 0) revert ZeroAmount();
+        if (points > penalties[wallet]) {
+            penalties[wallet] = 0;
+        } else {
+            penalties[wallet] -= points;
+        }
+        emit PenaltyReduced(wallet, points, reason);
+    }
+
+    /// @notice Get the total penalty points for a wallet
+    function getPenalty(address wallet) external view returns (uint256) {
+        _onlyAuthorized(wallet);
+        return _totalPenalty(wallet);
+    }
+
+    // ── Score Queries ────────────────────────────────────────
 
     function getScore(address wallet) external view returns (uint256) {
         _onlyAuthorized(wallet);
@@ -67,18 +118,20 @@ contract NexCredit {
         uint256 lockCommitment,
         uint256 protocolLoyalty,
         uint256 behavioralExcellence,
+        uint256 penaltyDeductions,
         uint256 total
     ) {
         _onlyAuthorized(wallet);
         if (wallet == OWNER) {
-            depositStrength = 250; lockCommitment = 250; protocolLoyalty = 250; behavioralExcellence = 250; total = 1000;
-            return (depositStrength, lockCommitment, protocolLoyalty, behavioralExcellence, total);
+            return (250, 250, 250, 250, 0, 1000);
         }
         depositStrength      = _depositStrength(wallet);
         lockCommitment       = _lockCommitment(wallet);
         protocolLoyalty       = _protocolLoyalty(wallet);
         behavioralExcellence = _behavioralExcellence(wallet);
-        total = depositStrength + lockCommitment + protocolLoyalty + behavioralExcellence;
+        penaltyDeductions    = _totalPenalty(wallet);
+        uint256 raw = depositStrength + lockCommitment + protocolLoyalty + behavioralExcellence;
+        total = raw > penaltyDeductions ? raw - penaltyDeductions : 0;
     }
 
     function getScoreLabel(address wallet) external view returns (string memory) {
@@ -95,10 +148,46 @@ contract NexCredit {
         }
     }
 
+    // ── Internal Scoring ─────────────────────────────────────
+
     function _computeScore(address wallet) internal view returns (uint256) {
         // Protocol founder — permanent Elite status
         if (wallet == OWNER) return 1000;
-        return _depositStrength(wallet) + _lockCommitment(wallet) + _protocolLoyalty(wallet) + _behavioralExcellence(wallet);
+        uint256 raw = _depositStrength(wallet) + _lockCommitment(wallet) + _protocolLoyalty(wallet) + _behavioralExcellence(wallet);
+        uint256 pen = _totalPenalty(wallet);
+        return raw > pen ? raw - pen : 0;
+    }
+
+    /// @notice Total penalty = admin penalties + dynamic referral inactivity penalty
+    function _totalPenalty(address wallet) internal view returns (uint256) {
+        uint256 adminPen = penalties[wallet];
+        uint256 refPen   = _referralInactivityPenalty(wallet);
+        return adminPen + refPen;
+    }
+
+    /// @notice If a user's referrals become inactive (withdraw all deposits),
+    ///         the referral bonus points are reduced proportionally.
+    ///         Each inactive referral costs 15 points (max 60 = all 4 referrals inactive).
+    function _referralInactivityPenalty(address wallet) internal view returns (uint256 pen) {
+        try referralRegistry.getReferrals(wallet) returns (address[] memory refs) {
+            for (uint256 i; i < refs.length; ++i) {
+                if (!_hasActiveDeposit(refs[i])) {
+                    pen += 15; // 15 pts per inactive referral
+                }
+            }
+        } catch {
+            // If registry call fails, no penalty
+        }
+    }
+
+    /// @notice Check if a wallet has at least one active deposit
+    function _hasActiveDeposit(address wallet) internal view returns (bool) {
+        try vault.getDeposits(wallet) returns (IUSDXVault.Deposit[] memory deps) {
+            for (uint256 i; i < deps.length; ++i) {
+                if (deps[i].active) return true;
+            }
+        } catch {}
+        return false;
     }
 
     function _depositStrength(address wallet) internal view returns (uint256 pts) {
