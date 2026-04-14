@@ -113,6 +113,48 @@ npx hardhat run scripts/deploy.js --network nexus
 
 See [`deploy documents.md`](./deploy%20documents.md) for full deployment guide including post-deploy steps and security notes.
 
+## NexCredit — On-Chain Credit Scoring
+
+NexCredit is a private on-chain credit scoring contract built into NexVault. It reads a wallet's deposit history and produces a score from 0 to 1000.
+
+**Privacy model:**
+- Wallet owners can only see their own score — free, always
+- Protocol owner can see any wallet's score
+- No external wallet or contract can see another user's score
+
+**Scoring categories (250 pts each):**
+
+| Category | Max | How to earn |
+|---|---|---|
+| Deposit Strength | 250 | $5K/+50, $25K/+80, $100K/+90 (cumulative) |
+| Lock Commitment | 250 | 1YR=+20, 3YR=+80, 5YR=+250 (highest tier only) |
+| Protocol Loyalty | 250 | 60d/180d/365d/730d/1095d thresholds |
+| Behavioral Excellence | 250 | Compound 3x, 5+ deposits, 3 referrals, badge+$5K, 2 active |
+
+**Score tiers:**
+
+| Tier | Range |
+|---|---|
+| No History | 0 |
+| Dormant | 1-149 |
+| Building | 150-299 |
+| Established | 300-499 |
+| Trusted | 500-699 |
+| Senior | 700-849 |
+| Elite | 850-1000 |
+
+Elite requires $100K+, 5-Year lock, and 3 years of loyalty simultaneously. Under 1% of wallets will ever qualify.
+
+**Deploy NexCredit:**
+```bash
+VAULT_ADDRESS=0x... BADGE_ADDRESS=0x... REGISTRY_ADDRESS=0x... \
+  npx hardhat run scripts/deploy-nexcredit.js --network nexus
+```
+
+After deployment, fill NEXCREDIT_ADDRESS in app.html config block.
+
+---
+
 ## Security
 
 - 174 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, view functions, cross-user isolation, yield math, and full lifecycle integration
