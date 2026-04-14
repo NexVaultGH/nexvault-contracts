@@ -496,4 +496,40 @@ describe("NexCredit", function () {
       expect(bd.depositStrength).to.equal(30); // base only, no $5K bonus
     });
   });
+
+  // ═══════════════════════════════════════════════════════
+  // Founder Elite Status
+  // ═══════════════════════════════════════════════════════
+  describe("Founder Elite Status", function () {
+    it("OWNER wallet always returns score 1000", async function () {
+      const score = await nexCredit.connect(owner).getScore(owner.address);
+      expect(score).to.equal(1000);
+    });
+
+    it("OWNER wallet label is Elite", async function () {
+      const label = await nexCredit.connect(owner).getScoreLabel(owner.address);
+      expect(label).to.equal("Elite");
+    });
+
+    it("OWNER breakdown returns 250 in all four categories", async function () {
+      const bd = await nexCredit.connect(owner).getScoreBreakdown(owner.address);
+      expect(bd.depositStrength).to.equal(250);
+      expect(bd.lockCommitment).to.equal(250);
+      expect(bd.protocolLoyalty).to.equal(250);
+      expect(bd.behavioralExcellence).to.equal(250);
+      expect(bd.total).to.equal(1000);
+    });
+
+    it("OWNER Elite status works even with no deposits", async function () {
+      // Owner has never deposited — still Elite
+      const score = await nexCredit.connect(owner).getScore(owner.address);
+      expect(score).to.equal(1000);
+    });
+
+    it("OWNER shows Elite in batch queries", async function () {
+      const scores = await nexCredit.connect(owner).getScoreBatch([owner.address, user1.address]);
+      expect(scores[0]).to.equal(1000); // owner = Elite
+      expect(scores[1]).to.equal(0);    // user1 = no deposits
+    });
+  });
 });

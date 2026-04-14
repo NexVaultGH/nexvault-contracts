@@ -2,14 +2,14 @@
 
 [![Nexus zkVM](https://img.shields.io/badge/Nexus_zkVM-v3.0-8B5CF6?style=flat-square&logo=ethereum)](https://docs.nexus.xyz/zkvm)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.25-363636?style=flat-square&logo=solidity)](https://docs.soliditylang.org)
-[![Tests](https://img.shields.io/badge/Tests-229_passing-22c55e?style=flat-square)](./test)
+[![Tests](https://img.shields.io/badge/Tests-234_passing-22c55e?style=flat-square)](./test)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](./LICENSE)
 
 USDX Savings Vault · Built on Nexus Blockchain · Up to 4.44% APY — U.S. Treasury Backed
 
 ---
 
-## 229 / 229 Tests Passing
+## 234 / 234 Tests Passing
 
 ```
 NexVault Protocol
@@ -43,8 +43,9 @@ NexCredit
     Score Tier Labels    4 passing
     Breakdown Integrity  2 passing
     Critical Invariants  4 passing
+    Founder Elite Status 5 passing
 
-  229 passing (15s)
+  234 passing (10s)
 ```
 
 [→ View full test output](./test-results.txt)
@@ -116,7 +117,7 @@ cp .env.example .env
 
 ```bash
 npx hardhat compile   # must show 0 errors
-npx hardhat test      # all 229 tests must pass
+npx hardhat test      # all 234 tests must pass
 ```
 
 ## Deploy to Nexus Mainnet
@@ -171,7 +172,7 @@ After deployment, fill NEXCREDIT_ADDRESS in app.html config block.
 
 ## Security
 
-- 229 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, credit scoring, view functions, cross-user isolation, yield math, and full lifecycle integration
+- 234 passing tests covering deployment, deposits, withdrawals, yield, referrals, lock enforcement, credit scoring, view functions, cross-user isolation, yield math, and full lifecycle integration
 - Certik audit-ready: CEI pattern in deposit(), custom errors, complete NatSpec
 - OpenZeppelin ReentrancyGuard on all state-changing functions
 - Strict CEI (Checks-Effects-Interactions) ordering — state changes before external calls

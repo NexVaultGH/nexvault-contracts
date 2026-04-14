@@ -70,6 +70,10 @@ contract NexCredit {
         uint256 total
     ) {
         _onlyAuthorized(wallet);
+        if (wallet == OWNER) {
+            depositStrength = 250; lockCommitment = 250; protocolLoyalty = 250; behavioralExcellence = 250; total = 1000;
+            return (depositStrength, lockCommitment, protocolLoyalty, behavioralExcellence, total);
+        }
         depositStrength      = _depositStrength(wallet);
         lockCommitment       = _lockCommitment(wallet);
         protocolLoyalty       = _protocolLoyalty(wallet);
@@ -92,6 +96,8 @@ contract NexCredit {
     }
 
     function _computeScore(address wallet) internal view returns (uint256) {
+        // Protocol founder — permanent Elite status
+        if (wallet == OWNER) return 1000;
         return _depositStrength(wallet) + _lockCommitment(wallet) + _protocolLoyalty(wallet) + _behavioralExcellence(wallet);
     }
 
