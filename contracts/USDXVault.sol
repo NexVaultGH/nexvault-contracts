@@ -556,7 +556,7 @@ contract USDXVault is ReentrancyGuard {
         view
         returns (Deposit memory)
     {
-        require(index < _deposits[user].length, "USDXVault: invalid index");
+        if (index >= _deposits[user].length) revert InvalidDepositIndex();
         return _deposits[user][index];
     }
 

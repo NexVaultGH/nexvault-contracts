@@ -68,6 +68,7 @@ contract VaultGenesisBadge is ERC721 {
     error AlreadyHasBadge();
     error SupplyExhausted();
     error TokenDoesNotExist();
+    error MinterAlreadySet();
 
     // ── State ──────────────────────────────────────────────────────────
     uint256 private _nextTokenId = 1;
@@ -117,7 +118,7 @@ contract VaultGenesisBadge is ERC721 {
      */
     function setMinterAuthorization(address minter) external onlyOwner {
         if (minter == address(0)) revert ZeroAddress();
-        if (authorizedMinter != address(0)) revert("Minter already set");
+        if (authorizedMinter != address(0)) revert MinterAlreadySet();
         authorizedMinter = minter;
         emit MinterSet(minter);
     }

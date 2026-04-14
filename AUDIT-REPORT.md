@@ -110,15 +110,15 @@ All contracts pass security review. Principal protection is mathematically enfor
 
 ## Medium Findings
 
-### M-01: Revert string in USDXVault.sol (line 559)
-- **Issue:** Uses `require()` with string instead of custom error
-- **Impact:** Gas inefficiency, inconsistency
-- **Status:** Noted — cosmetic only, does not affect security
+### M-01: Revert string in USDXVault.sol (line 559) — FIXED
+- **Issue:** Used `require()` with string instead of custom error
+- **Fix:** Replaced with `if (index >= ...) revert InvalidDepositIndex();`
+- **Status:** RESOLVED
 
-### M-02: Revert string in VaultGenesisBadge.sol (line 120)
+### M-02: Revert string in VaultGenesisBadge.sol (line 120) — FIXED
 - **Issue:** `revert("Minter already set")` instead of custom error
-- **Impact:** Gas inefficiency, inconsistency
-- **Status:** Noted — cosmetic only, does not affect security
+- **Fix:** Added `error MinterAlreadySet();` and replaced revert string
+- **Status:** RESOLVED
 
 ---
 
@@ -139,10 +139,10 @@ All contracts pass security review. Principal protection is mathematically enfor
 - **Fix:** Updated to 1-Year (3.80%), 3-Year (4.10%), 5-Year (4.44%)
 - **Status:** FIXED
 
-### L-04: No GYDS status indicator in app.html
-- **Issue:** Dashboard has no UI for GYDS active/pending status
-- **Impact:** Users cannot see if GYDS is distributing yield
-- **Status:** Noted — to be implemented at mainnet
+### L-04: No GYDS status indicator in app.html — FIXED
+- **Issue:** Dashboard had no UI for GYDS active/pending status
+- **Fix:** Added GYDS status card with PENDING/ACTIVE states, checks `vault.gydsActive()` on wallet connect
+- **Status:** RESOLVED
 
 ---
 
@@ -229,14 +229,14 @@ All contracts pass security review. Principal protection is mathematically enfor
 
 ## Score
 
-**92/100**
+**95/100**
 
 | Category | Score | Notes |
 |---|---|---|
-| Smart Contract Security | 24/25 | 2 medium (revert strings) |
+| Smart Contract Security | 25/25 | Both revert strings fixed to custom errors |
 | Test Coverage | 25/25 | 229/229 passing, all categories covered |
-| Website Consistency | 23/25 | Fixed 4 old APY references, GYDS indicator missing |
-| Configuration | 20/25 | Config files ready, addresses pending mainnet |
+| Website Consistency | 25/25 | All APY values correct, GYDS indicator added, on-chain deposit flow implemented |
+| Configuration | 20/25 | Config files ready, addresses pending mainnet (-3 empty addresses, -1 chain ID, -1 no formal audit) |
 
 ---
 
