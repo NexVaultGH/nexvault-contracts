@@ -1,29 +1,56 @@
-# Nexus Mainnet Launch Checklist
+# NexVault Deployment Checklist
 
-## Pre-Deploy
+## 🟢 Nexus Testnet Deployment (Available NOW)
 
-- [ ] Get Nexus mainnet RPC URL from nexus.xyz/developers
-- [ ] Get Nexus chain ID from Nexus documentation
-- [ ] Get USDX token contract address from Nexus team
-- [ ] Get GYDS distributor address from Nexus team
-- [ ] Fill all values in `.env` file (never commit .env)
-- [ ] Test deployment on Nexus testnet first
-- [ ] Run `npx hardhat test` — confirm 229 passing, 0 failing
+Use this for testing the full protocol stack on real Nexus infrastructure before mainnet.
 
-## Deploy (exact order)
+### Prerequisites
+- [ ] Add Nexus Testnet to MetaMask
+  - Network Name: Nexus Testnet
+  - RPC URL: https://testnet.rpc.nexus.xyz
+  - Chain ID: 3945
+  - Currency: NEX
+  - Explorer: https://testnet.explorer.nexus.xyz
+- [ ] Get testnet NEX from https://faucet.nexus.xyz
+- [ ] Get testnet USDX address from Nexus team (check docs.nexus.xyz or developer Discord)
+- [ ] Set PRIVATE_KEY in .env (deployer wallet with testnet NEX)
 
-```bash
-npx hardhat run scripts/deploy.js --network nexus
-```
+### Deployment Steps
+1. `npx hardhat compile`
+2. `npx hardhat test` — confirm all tests passing
+3. `npx hardhat run scripts/deploy.js --network nexus_testnet`
+4. Save deployed addresses from output
+5. Run authorization sequence:
+   - `registry.setVaultAuthorization(vaultAddress, true)`
+   - `badge.setMinterAuthorization(vaultAddress)`
+   - `vault.setCompoundOperator(autoCompounderAddress, true)`
+6. `npx hardhat run scripts/deploy-nexcredit.js --network nexus_testnet`
+7. Update app.html config block with all deployed addresses
+8. Switch ACTIVE_NETWORK to NETWORKS.testnet in app.html (already default)
+9. Deploy app.html to Netlify
+10. Test full flow: connect wallet → deposit → claim yield → check NexCredit score → withdraw
 
-Deploy order enforced by script:
-1. ReferralRegistry
-2. VaultGenesisBadge
-3. USDXVault (receives registry + badge addresses)
-4. AutoCompounder (receives vault address)
-5. NexCredit (receives vault + badge + registry addresses)
+## 🟡 Nexus Mainnet Deployment (Q2 2026)
 
-## Post-Deploy Authorization
+Wait for official Nexus mainnet launch. Then:
+
+### Prerequisites
+- [ ] Get Nexus mainnet RPC URL from Nexus team
+- [ ] Get Nexus mainnet Chain ID from Nexus team
+- [ ] Get production USDX token address
+- [ ] Get production GYDS distributor address
+- [ ] Smart contract audit complete (target $10K-$15K spend)
+- [ ] All tests passing on testnet for 30+ days without issues
+- [ ] At least 100 successful testnet deposits/withdrawals completed
+
+### Deployment Steps
+Same as testnet steps above, but:
+- Use --network nexus instead of --network nexus_testnet
+- Switch ACTIVE_NETWORK to NETWORKS.mainnet in app.html
+- Update testnet banner on homepage to reflect mainnet status
+- Email entire waitlist with launch announcement
+
+## Post-Deploy Authorization (both networks)
 
 ```bash
 # Run from OWNER wallet (0x44e06FB3517Ee815BBA5612F783712Ac4f498ba0)
@@ -40,17 +67,6 @@ vault.setGYDS(gydsAddress)
 - [ ] `badge.authorizedMinter()` returns vault address
 - [ ] `registry.authorizedVaults(vaultAddress)` returns `true`
 - [ ] `vault.compoundOperators(autoCompounderAddress)` returns `true`
-
-## Website Update
-
-- [ ] Fill deployed addresses into app.html config block:
-  - `VAULT_ADDRESS`
-  - `USDX_ADDRESS`
-  - `NEXCREDIT_ADDRESS`
-- [ ] Update `NEXUS_CHAIN_ID` in app.html
-- [ ] Update `NEXUS_RPC_URL` in app.html
-- [ ] Deploy all HTML files to Netlify
-- [ ] Push final contracts to GitHub
 
 ## Post-Launch
 

@@ -9,6 +9,30 @@ USDX Savings Vault · Built on Nexus Blockchain · Up to 4.44% APY — U.S. Trea
 
 ---
 
+## 🌐 Network Status
+
+| Network | Status | Chain ID | RPC |
+|---------|--------|----------|-----|
+| Nexus Testnet | 🟢 Live | 3945 | testnet.rpc.nexus.xyz |
+| Nexus Mainnet | 🟡 Q2 2026 | TBA | TBA |
+
+### Deploy to Testnet
+
+```bash
+npx hardhat run scripts/deploy.js --network nexus_testnet
+npx hardhat run scripts/deploy-nexcredit.js --network nexus_testnet
+```
+
+### Add Nexus Testnet to MetaMask
+- Network Name: `Nexus Testnet`
+- RPC URL: `https://testnet.rpc.nexus.xyz`
+- Chain ID: `3945`
+- Currency Symbol: `NEX`
+- Block Explorer: `https://testnet.explorer.nexus.xyz`
+- Faucet: `https://faucet.nexus.xyz`
+
+---
+
 ## 246 / 246 Tests Passing
 
 ```

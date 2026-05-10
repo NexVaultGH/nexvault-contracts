@@ -23,7 +23,18 @@ module.exports = {
       url: "http://127.0.0.1:8545",
       chainId: 31337,
     },
-    // ── Nexus Mainnet (NexusEVM — zkVM-proven execution layer) ──────────────
+    // ── Nexus Testnet (LIVE — Chain ID 3945) ────────────────────────────────
+    // Public testnet for Nexus zkVM v3.0. Use this for full integration testing
+    // with real Nexus infrastructure before mainnet.
+    // Faucet: https://faucet.nexus.xyz
+    // Explorer: https://testnet.explorer.nexus.xyz
+    nexus_testnet: {
+      url: "https://testnet.rpc.nexus.xyz",
+      chainId: 3945,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: "auto",
+    },
+    // ── Nexus Mainnet (LAUNCHING Q2 2026 — placeholder) ─────────────────────
     // NexusEVM is EVM-compatible. Every transaction is automatically proven
     // by the Nexus zkVM v3.0 running on every node — no config changes needed.
     // Docs: https://docs.nexus.xyz/zkvm
