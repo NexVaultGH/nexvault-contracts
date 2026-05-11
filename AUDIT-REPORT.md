@@ -57,7 +57,7 @@ NexCredit
 - SafeERC20 for all token transfers
 - CEI pattern throughout
 - OWNER hardcoded, constructor enforces owner-only deploy
-- Tiers: LOCK_1YR=365d/380bps, LOCK_3YR=1095d/410bps, LOCK_5YR=1825d/444bps
+- Tiers: LOCK_1YR=365d/375bps, LOCK_3YR=1095d/392bps, LOCK_5YR=1825d/438bps
 - DEV_CUT_BPS=1000 (10%)
 - receiveYield() restricted to registered GYDS address
 - Principal mathematically protected (reserve check on dev earnings withdrawal)
@@ -150,7 +150,7 @@ All contracts pass security review. Principal protection is mathematically enfor
 
 | Value | Expected | Files Checked | Result |
 |---|---|---|---|
-| APY Rates | 3.80/4.10/4.44% | All HTML, JS, contracts | PASS (after fixes) |
+| APY Rates | 3.75/3.92/4.38% (Treasury-matched) | All HTML, JS, contracts | PASS |
 | Lock Periods | 365/1095/1825 days | All files | PASS |
 | Genesis Supply | 5,000 | All files | PASS |
 | Dev Cut | 10% | Contracts, whitepaper | PASS |
