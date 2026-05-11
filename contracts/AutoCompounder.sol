@@ -126,6 +126,14 @@ contract AutoCompounder {
             unchecked { i++; }
         }
 
+        // The BatchCompounded summary event must aggregate the loop result,
+        // so it is emitted after the external calls by necessity.
+        // Reentrancy safety guarantees:
+        //   1. vault.compoundForUser() has nonReentrant on the vault side.
+        //   2. AutoCompounder has no reentry-sensitive storage — `succeeded`
+        //      is a local stack variable, reset every call.
+        //   3. The event is purely informational; no on-chain state depends on it.
+        // slither-disable-next-line reentrancy-events
         emit BatchCompounded(users.length, succeeded, msg.sender);
     }
 

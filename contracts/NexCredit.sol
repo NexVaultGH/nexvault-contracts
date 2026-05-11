@@ -146,6 +146,7 @@ contract NexCredit {
         for (uint256 i = 0; i < wallets.length; ++i) {
             scores[i] = _computeScore(wallets[i]);
         }
+        return scores;
     }
 
     // ── Internal Scoring ─────────────────────────────────────
@@ -170,7 +171,7 @@ contract NexCredit {
     ///         Each inactive referral costs 15 points (max 60 = all 4 referrals inactive).
     function _referralInactivityPenalty(address wallet) internal view returns (uint256 pen) {
         try referralRegistry.getReferrals(wallet) returns (address[] memory refs) {
-            for (uint256 i; i < refs.length; ++i) {
+            for (uint256 i = 0; i < refs.length; ++i) {
                 if (!_hasActiveDeposit(refs[i])) {
                     pen += 15; // 15 pts per inactive referral
                 }
@@ -183,7 +184,7 @@ contract NexCredit {
     /// @notice Check if a wallet has at least one active deposit
     function _hasActiveDeposit(address wallet) internal view returns (bool) {
         try vault.getDeposits(wallet) returns (IUSDXVault.Deposit[] memory deps) {
-            for (uint256 i; i < deps.length; ++i) {
+            for (uint256 i = 0; i < deps.length; ++i) {
                 if (deps[i].active) return true;
             }
         } catch {}
@@ -192,9 +193,9 @@ contract NexCredit {
 
     function _depositStrength(address wallet) internal view returns (uint256 pts) {
         IUSDXVault.Deposit[] memory deps = vault.getDeposits(wallet);
-        uint256 total;
-        bool anyActive;
-        for (uint256 i; i < deps.length; ++i) {
+        uint256 total = 0;
+        bool anyActive = false;
+        for (uint256 i = 0; i < deps.length; ++i) {
             if (deps[i].active) { anyActive = true; total += deps[i].principal; }
         }
         if (!anyActive) return 0;
@@ -206,8 +207,8 @@ contract NexCredit {
 
     function _lockCommitment(address wallet) internal view returns (uint256 pts) {
         IUSDXVault.Deposit[] memory deps = vault.getDeposits(wallet);
-        uint256 highest;
-        for (uint256 i; i < deps.length; ++i) {
+        uint256 highest = 0;
+        for (uint256 i = 0; i < deps.length; ++i) {
             if (!deps[i].active) continue;
             uint256 t = uint256(deps[i].tier) + 1;
             if (t > highest) highest = t;
@@ -219,8 +220,8 @@ contract NexCredit {
 
     function _protocolLoyalty(address wallet) internal view returns (uint256 pts) {
         IUSDXVault.Deposit[] memory deps = vault.getDeposits(wallet);
-        uint64 oldest;
-        for (uint256 i; i < deps.length; ++i) {
+        uint64 oldest = 0;
+        for (uint256 i = 0; i < deps.length; ++i) {
             if (!deps[i].active) continue;
             uint64 da = deps[i].depositedAt;
             if (oldest == 0 || da < oldest) oldest = da;
@@ -236,10 +237,10 @@ contract NexCredit {
 
     function _behavioralExcellence(address wallet) internal view returns (uint256 pts) {
         IUSDXVault.Deposit[] memory deps = vault.getDeposits(wallet);
-        uint256 activeCount;
-        uint256 compoundCount;
-        uint256 activePrincipal;
-        for (uint256 i; i < deps.length; ++i) {
+        uint256 activeCount = 0;
+        uint256 compoundCount = 0;
+        uint256 activePrincipal = 0;
+        for (uint256 i = 0; i < deps.length; ++i) {
             if (deps[i].active) { activeCount++; activePrincipal += deps[i].principal; }
             if (deps[i].lastYieldAt > deps[i].depositedAt) compoundCount++;
         }

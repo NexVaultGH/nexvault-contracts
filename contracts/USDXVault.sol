@@ -113,6 +113,23 @@ contract USDXVault is ReentrancyGuard {
     // ── Genesis badge limit ────────────────────────────────────────────
     uint256 public constant GENESIS_BADGE_LIMIT = 5_000;
 
+    // ── Per-user deposit cap (DoS protection on view functions) ───────
+    // Bounds the per-user _deposits[] array length so view functions
+    // (totalPendingYield, getDeposits) always complete in a single call.
+    // 200 deposits per wallet is generous for any realistic use case.
+    uint256 public constant MAX_DEPOSITS_PER_USER = 200;
+
+    // ── Min-deposit upper bound (admin function protection) ───────────
+    // Bounds setMinDepositAmount so the owner can never raise the minimum
+    // beyond a reasonable dust threshold. 1,000 USDX is the absolute ceiling.
+    uint256 public constant MAX_MIN_DEPOSIT_AMOUNT = 1_000_000000; // 1,000 USDX (6 decimals)
+
+    // ── Max dev earnings per transaction (admin function protection) ──
+    // Bounds withdrawDevEarnings per-tx to limit single-tx exfiltration in
+    // the event of an OWNER key compromise. 100,000 USDX per call is more
+    // than enough for normal operation; multiple txs are still possible.
+    uint256 public constant MAX_DEV_WITHDRAW_PER_TX = 100_000_000000; // 100,000 USDX
+
     // ── Time constants ─────────────────────────────────────────────────
     uint256 public constant SECONDS_PER_YEAR  = 365 days;   // 31,536,000
     // ── APY constants in basis points (1 bps = 0.01%) ─────────────────
@@ -193,6 +210,7 @@ contract USDXVault is ReentrancyGuard {
     event CompoundOperatorSet(address indexed operator, bool authorized);
     event DevEarningsWithdrawn(uint256 amount, address indexed to);
     event GYDSYieldReceived(uint256 amount, address indexed from);
+    event MinDepositAmountSet(uint256 newMin);
 
     // ── Custom errors (gas-efficient) ──────────────────────────────────
     error NotOwner();
@@ -213,6 +231,9 @@ contract USDXVault is ReentrancyGuard {
     error UnauthorizedCompoundCaller();           // caller is neither the user nor an authorized operator
     error GYDSAlreadySet();                        // GYDS can only be set once
     error BelowMinimumDeposit();                   // deposit below minimum threshold
+    error TooManyDeposits();                       // user has hit MAX_DEPOSITS_PER_USER
+    error MinDepositAboveMax();                    // setMinDepositAmount exceeds ceiling
+    error DevWithdrawAboveMax();                   // withdrawDevEarnings exceeds per-tx ceiling
 
     // ── Modifiers ──────────────────────────────────────────────────────
     modifier onlyOwner() {
@@ -319,9 +340,15 @@ contract USDXVault is ReentrancyGuard {
      * @notice Set the minimum deposit amount.
      *         Prevents dust deposits and referral sybil farming.
      *         Set to 0 for no minimum.
+     *
+     *         BOUNDED: cannot exceed MAX_MIN_DEPOSIT_AMOUNT (1,000 USDX).
+     *         This guarantees the owner can never lock users out by
+     *         setting an unreasonably high minimum.
      */
     function setMinDepositAmount(uint256 min) external onlyOwner {
+        if (min > MAX_MIN_DEPOSIT_AMOUNT) revert MinDepositAboveMax();
         minDepositAmount = min;
+        emit MinDepositAmountSet(min);
     }
 
     /**
@@ -337,8 +364,9 @@ contract USDXVault is ReentrancyGuard {
      * @param amount Amount of USDX to withdraw (6 decimals).
      */
     function withdrawDevEarnings(uint256 amount) external nonReentrant onlyOwner {
-        if (amount == 0)                  revert ZeroAmount();
-        if (amount > devEarningsBalance)  revert ExceedsDevEarnings();
+        if (amount == 0)                       revert ZeroAmount();
+        if (amount > MAX_DEV_WITHDRAW_PER_TX)   revert DevWithdrawAboveMax();
+        if (amount > devEarningsBalance)       revert ExceedsDevEarnings();
 
         // Critical invariant: owner can NEVER touch user principal
         uint256 vaultBalance = usdx.balanceOf(address(this));
@@ -377,6 +405,7 @@ contract USDXVault is ReentrancyGuard {
         if (amount == 0)                 revert ZeroAmount();
         if (amount > type(uint128).max)  revert AmountOverflow();
         if (minDepositAmount > 0 && amount < minDepositAmount) revert BelowMinimumDeposit();
+        if (_deposits[msg.sender].length >= MAX_DEPOSITS_PER_USER) revert TooManyDeposits();
 
         // ── EFFECTS ───────────────────────────────────────────────────
         // All state changes occur before the external token transfer.
@@ -475,7 +504,8 @@ contract USDXVault is ReentrancyGuard {
         Deposit storage d = _getActiveDeposit(msg.sender, depositIndex);
 
         uint256 rawYield  = _calcYield(msg.sender, d);
-        if (rawYield == 0) return; // nothing to claim — silent no-op
+        // slither-disable-next-line incorrect-equality
+        if (rawYield == 0) return; // nothing to claim — silent no-op (safe zero-check)
 
         uint256 devCut    = rawYield * DEV_CUT_BPS / BPS_BASE;
         uint256 userYield = rawYield - devCut;
@@ -513,7 +543,8 @@ contract USDXVault is ReentrancyGuard {
         Deposit storage d = _getActiveDeposit(user, depositIndex);
 
         uint256 rawYield  = _calcYield(user, d);
-        if (rawYield == 0) return; // nothing to compound
+        // slither-disable-next-line incorrect-equality
+        if (rawYield == 0) return; // nothing to compound (safe zero-check)
 
         uint256 devCut    = rawYield * DEV_CUT_BPS / BPS_BASE;
         uint256 addToP    = rawYield - devCut;
@@ -782,7 +813,8 @@ contract USDXVault is ReentrancyGuard {
         returns (uint256)
     {
         uint256 elapsed = block.timestamp - d.lastYieldAt;
-        if (elapsed == 0) return 0;
+        // slither-disable-next-line incorrect-equality
+        if (elapsed == 0) return 0; // safe zero-check on local arithmetic result
 
         uint256 apy = _tierAPY(d.tier);
 

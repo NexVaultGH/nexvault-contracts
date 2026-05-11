@@ -149,9 +149,12 @@ contract VaultGenesisBadge is ERC721 {
         genesisPosition[recipient]   = tokenId;
         originalMinter[tokenId]      = recipient;
 
-        _safeMint(recipient, tokenId);
-
+        // Emit before _safeMint so the event lands before any
+        // onERC721Received callback (CEI-compliant). Reentrancy is
+        // already blocked at the USDXVault layer (nonReentrant).
         emit BadgeMinted(recipient, tokenId, tokenId);
+
+        _safeMint(recipient, tokenId);
     }
 
     // ── View helpers ───────────────────────────────────────────────────

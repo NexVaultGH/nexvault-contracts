@@ -27,7 +27,7 @@ CONTRACT_ZKVM_MARKERS = {
     "AutoCompounder.sol":     "//  No stored user data — purely a pass-through keeper\n",
     "ReferralRegistry.sol":   "//  One referrer per user — cannot be overwritten\n",
     "VaultGenesisBadge.sol":  "//  Mint failure NEVER blocks a deposit (vault wraps in try/catch)\n",
-    "MockUSDX.sol":           None,  # skip mock
+    "mocks/MockUSDX.sol":     None,  # skip mock — relocated to contracts/mocks/
 }
 
 for fname, marker in CONTRACT_ZKVM_MARKERS.items():
