@@ -36,10 +36,10 @@ pragma solidity 0.8.25;
 //  ✓ Genesis badge mint failure never blocks deposit (try/catch)
 //  ✓ Referral registration failure never blocks deposit (try/catch)
 //
-//  YIELD TIERS:
-//  LOCK_1YR  —  3.80% APY  — 365-day lock (1 year)
-//  LOCK_3YR  —  4.10% APY  — 1095-day lock (3 years)
-//  LOCK_5YR  —  4.44% APY  — 1825-day lock (5 years)
+//  YIELD TIERS (matched to current U.S. Treasury yields):
+//  LOCK_1YR  —  3.75% APY  — 365-day lock  (1Y T-bill rate)
+//  LOCK_3YR  —  3.92% APY  — 1095-day lock (3Y T-note rate)
+//  LOCK_5YR  —  4.38% APY  — 1825-day lock (10Y T-note rate)
 //
 //  DEV CUT: 10% of all user yield accrued — funded from GYDS distributions
 //
@@ -116,9 +116,9 @@ contract USDXVault is ReentrancyGuard {
     // ── Time constants ─────────────────────────────────────────────────
     uint256 public constant SECONDS_PER_YEAR  = 365 days;   // 31,536,000
     // ── APY constants in basis points (1 bps = 0.01%) ─────────────────
-    uint256 public constant APY_1YR      = 380;   // 3.80%
-    uint256 public constant APY_3YR      = 410;   // 4.10%
-    uint256 public constant APY_5YR      = 444;   // 4.44%
+    uint256 public constant APY_1YR      = 375;   // 3.75% (matches 1Y U.S. Treasury bill)
+    uint256 public constant APY_3YR      = 392;   // 3.92% (matches 3Y U.S. Treasury note)
+    uint256 public constant APY_5YR      = 438;   // 4.38% (matches 10Y U.S. Treasury note)
 
     // ── Lock durations ─────────────────────────────────────────────────
     uint256 public constant LOCK_1YR  = 365 days;
@@ -802,7 +802,7 @@ contract USDXVault is ReentrancyGuard {
     /**
      * @dev APY basis points for a tier.
      * @param tier The yield tier enum value.
-     * @return     APY in basis points (380, 410, or 444).
+     * @return     APY in basis points (375, 392, or 438).
      */
     function _tierAPY(Tier tier) internal pure returns (uint256) {
         if (tier == Tier.LOCK_1YR) return APY_1YR;

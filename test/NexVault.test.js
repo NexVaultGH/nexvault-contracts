@@ -19,9 +19,9 @@ const LOCK_1YR  = 365n * 24n * 3600n;
 const LOCK_3YR  = 1095n * 24n * 3600n;
 const LOCK_5YR  = 1825n * 24n * 3600n;
 
-const APY_1YR      = 380n;
-const APY_3YR      = 410n;
-const APY_5YR      = 444n;
+const APY_1YR      = 375n;
+const APY_3YR      = 392n;
+const APY_5YR      = 438n;
 
 const DEV_CUT_BPS  = 1000n;
 const BPS_BASE     = 10000n;
@@ -1122,9 +1122,9 @@ describe("NexVault Protocol", function () {
     });
 
     it("tierAPY view returns correct values", async function () {
-      expect(await vault.tierAPY(TIERS.LOCK_1YR)).to.equal(380n);
-      expect(await vault.tierAPY(TIERS.LOCK_3YR)).to.equal(410n);
-      expect(await vault.tierAPY(TIERS.LOCK_5YR)).to.equal(444n);
+      expect(await vault.tierAPY(TIERS.LOCK_1YR)).to.equal(375n);
+      expect(await vault.tierAPY(TIERS.LOCK_3YR)).to.equal(392n);
+      expect(await vault.tierAPY(TIERS.LOCK_5YR)).to.equal(438n);
     });
 
     it("tierLockDuration view returns correct values", async function () {
@@ -1470,7 +1470,7 @@ describe("NexVault Protocol", function () {
       await vault.connect(user1).deposit(principal, TIERS.LOCK_1YR, ethers.ZeroAddress);
       await time.increase(Number(LOCK_1YR));
 
-      // Expected raw yield = principal * 380 * LOCK_1YR / (LOCK_1YR * 10000)
+      // Expected raw yield = principal * 375 * LOCK_1YR / (LOCK_1YR * 10000)
       const rawYield = principal * APY_1YR / BPS_BASE; // simplified for full year
       const devCut   = rawYield * DEV_CUT_BPS / BPS_BASE;
       const expected = rawYield - devCut;

@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/Tests-246_passing-22c55e?style=flat-square)](./test)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](./LICENSE)
 
-USDX Savings Vault · Built on Nexus Blockchain · Up to 4.44% APY — U.S. Treasury Backed
+USDX Savings Vault · Built on Nexus Blockchain · Up to 4.38% APY — U.S. Treasury Backed
 
 ---
 
